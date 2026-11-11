@@ -6,6 +6,8 @@ declare module 'claude-code' {
       variant: number
       scenario: number
       tick: number
+      moreFive: boolean
+      moreWeek: boolean
     }
   }
 }

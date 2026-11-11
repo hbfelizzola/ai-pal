@@ -15,4 +15,11 @@ test('every layout x history scenario draws on desktop', async ($, on) => {
     }
     await ui.press({ key: 'scn' })
   }
+  // Back on D (the default): open both More sections, then close them.
+  await ui.press({ key: 'more-five_hour' })
+  await ui.press({ key: 'more-seven_day' })
+  expect(JSON.stringify(await ui.drawn())).toContain('LOST AT RESET')
+  await ui.press({ key: 'more-five_hour' })
+  await ui.press({ key: 'more-seven_day' })
+  expect(JSON.stringify(await ui.drawn())).not.toContain('LOST AT RESET')
 })

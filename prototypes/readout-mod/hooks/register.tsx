@@ -9,8 +9,10 @@ import type { Register } from 'claude-code'
 import type { Reading } from '../types'
 
 const PANE = 'ai-pal'
-const variant = atom({ plugin: 'ai-pal-readout-prototype', key: 'variant' } as const, 0)
+const variant = atom({ plugin: 'ai-pal-readout-prototype', key: 'variant' } as const, 3)
 const scenario = atom({ plugin: 'ai-pal-readout-prototype', key: 'scenario' } as const, 0)
+const moreFive = atom({ plugin: 'ai-pal-readout-prototype', key: 'moreFive' } as const, false)
+const moreWeek = atom({ plugin: 'ai-pal-readout-prototype', key: 'moreWeek' } as const, false)
 const tick = atom({ plugin: 'ai-pal-readout-prototype', key: 'tick' } as const, 0)
 
 const VARIANTS = ['Stacked by window', 'Table by metric', 'Tiles', 'Time bars']
@@ -421,12 +423,14 @@ export const register: Register = on => {
     } else {
       // D · Time bars, projection first: per window a bar of time to Reset with
       // the Active Use needed laid over it; overrun spills past the Reset tick
-      // in amber. History shrinks to a dot strip + one line.
+      // in amber. Collapsed, history is a dot strip + average; "More" under each
+      // window opens its full history below: column chart, series, legend.
+      const isOpen = { five_hour: await read($, moreFive), seven_day: await read($, moreWeek) }
       body = (
         <Box flexDirection="column" gap={2}>
           {sectionTitle('Time to spend what is left')}
           {both.map(st => (
-            <Box flexDirection="column">
+            <Box flexDirection="column" gap={0}>
               <Box flexDirection="row" justifyContent="space-between">
                 <Text weight="semibold" size="footnote" color={st.colors[1]}>{st.name}</Text>
                 {st.burn === undefined ? <Text /> : (
@@ -435,14 +439,31 @@ export const register: Register = on => {
               </Box>
               {st.burn === undefined ? noBurn : svg(timeBarSvg(W, st), `${st.name}: ${projText(st)}`, W, 26)}
               {st.burn !== undefined && <Text size="caption" color={MUTED} tabular>at {rateText(st.burn)}%/h of Active Use</Text>}
-            </Box>
-          ))}
-          {sectionTitle('Lost at Reset')}
-          {both.map(st => (
-            <Box flexDirection="row" gap={1} alignItems="center">
-              <Box width={8}><Text size="footnote" color={st.colors[1]} weight="semibold">{st.name}</Text></Box>
-              {svg(dotsSvg(Math.min(160, W - 150), st, now), `${st.name} Lost Allowance per past window`, Math.min(160, W - 150), 16)}
-              <Text size="caption" color={MUTED} tabular>{st.avg === undefined ? '' : `avg ${st.avg}% · ${st.exact}/${st.past.length}`}</Text>
+              {!isOpen[st.kind] && (
+                <Box flexDirection="row" gap={1} alignItems="center" marginTop={1}>
+                  {svg(dotsSvg(Math.min(150, W - 160), st, now), `${st.name} Lost Allowance per past window`, Math.min(150, W - 160), 16)}
+                  <Text size="caption" color={MUTED} tabular>{avgText(st)}</Text>
+                </Box>
+              )}
+              {isOpen[st.kind] && (
+                <Box flexDirection="column" marginTop={1}>
+                  <Box flexDirection="row" justifyContent="space-between">
+                    <Text size="caption" color={MUTED} weight="semibold">LOST AT RESET</Text>
+                    <Text size="caption" color={MUTED} tabular>{avgText(st)}</Text>
+                  </Box>
+                  {svg(columnsSvg(W, 64, st, now, axisOf(st)), `${st.name} Lost Allowance per past window`, W, 64)}
+                  <Text mono size="caption" color={MUTED}>{st.past.length ? st.past.map(entryText).join(' ') : '—'}</Text>
+                  <Text size="caption" color={MUTED}>≤ upper bound · – no data · ↺ reset early</Text>
+                </Box>
+              )}
+              <Box flexDirection="row" marginTop={1}>
+                <Button
+                  key={`more-${st.kind}`}
+                  variant="secondary"
+                  label={isOpen[st.kind] ? 'Less' : 'More'}
+                  onPress={() => (st.kind === 'five_hour' ? update($, moreFive, b => !b) : update($, moreWeek, b => !b))}
+                />
+              </Box>
             </Box>
           ))}
         </Box>
