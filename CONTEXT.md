@@ -15,3 +15,11 @@ _Avoid_: Refresh, renewal
 **Unused Allowance**:
 The share of a Usage Window's cap still unspent at a given moment; whatever remains at the Reset is lost.
 _Avoid_: Leftover, remaining quota, wasted usage, "giving usage away"
+
+**Nudge**:
+A reminder, sent only to someone who has left the session, that a Usage Window still has Unused Allowance shortly before its Reset.
+_Avoid_: Alert, warning (those suggest hitting a cap, which ai-pal does not cover)
+
+**Burn Rate**:
+How fast you spend a Usage Window's cap while actively using Claude, measured as percent of the cap per hour of active use. Never measured in tokens.
+_Avoid_: Token rate, spend speed
