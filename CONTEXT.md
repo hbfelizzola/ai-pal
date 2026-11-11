@@ -16,6 +16,10 @@ _Avoid_: Refresh, renewal
 The share of a Usage Window's cap still unspent at a given moment; whatever remains at the Reset is lost.
 _Avoid_: Leftover, remaining quota, wasted usage, "giving usage away"
 
+**Lost Allowance**:
+The Unused Allowance a Usage Window still had at its Reset. Known only from the last Reading before that Reset, so it is exact only when that Reading was recent.
+_Avoid_: Wasted usage, unused at reset, leftover
+
 **Reading**:
 A record of one Usage Window's Unused Allowance and Reset as reported at one moment, together with that moment. A Reading is **stale** once it is too old to trust as the current figure.
 _Avoid_: Sample, snapshot, data point
@@ -28,6 +32,10 @@ _Avoid_: Alert, warning (those suggest hitting a cap, which ai-pal does not cove
 A daily span of local time in which no Nudge is delivered.
 _Avoid_: Do-not-disturb, mute (those belong to the OS)
 
+**Active Use**:
+Time you spend working with Claude, counted in 5-minute slots: a slot is active when Claude ran a turn in any session during it. It includes your reading and typing between turns, unlike Claude's own working time.
+_Avoid_: Usage time, session time, compute time
+
 **Burn Rate**:
-How fast you spend a Usage Window's cap while actively using Claude, measured as percent of the cap per hour of active use. Never measured in tokens.
+How fast you spend a Usage Window's cap during Active Use, measured as percent of the cap per hour of Active Use. Never measured in tokens.
 _Avoid_: Token rate, spend speed
