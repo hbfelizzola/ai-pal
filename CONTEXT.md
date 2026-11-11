@@ -16,6 +16,10 @@ _Avoid_: Refresh, renewal
 The share of a Usage Window's cap still unspent at a given moment; whatever remains at the Reset is lost.
 _Avoid_: Leftover, remaining quota, wasted usage, "giving usage away"
 
+**Reading**:
+A record of one Usage Window's Unused Allowance and Reset as reported at one moment, together with that moment. A Reading is **stale** once it is too old to trust as the current figure.
+_Avoid_: Sample, snapshot, data point
+
 **Nudge**:
 A reminder, sent only to someone who has left the session, that a Usage Window still has Unused Allowance shortly before its Reset.
 _Avoid_: Alert, warning (those suggest hitting a cap, which ai-pal does not cover)
