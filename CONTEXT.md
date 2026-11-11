@@ -20,6 +20,10 @@ _Avoid_: Leftover, remaining quota, wasted usage, "giving usage away"
 A reminder, sent only to someone who has left the session, that a Usage Window still has Unused Allowance shortly before its Reset.
 _Avoid_: Alert, warning (those suggest hitting a cap, which ai-pal does not cover)
 
+**Quiet Hours**:
+A daily span of local time in which no Nudge is delivered.
+_Avoid_: Do-not-disturb, mute (those belong to the OS)
+
 **Burn Rate**:
 How fast you spend a Usage Window's cap while actively using Claude, measured as percent of the cap per hour of active use. Never measured in tokens.
 _Avoid_: Token rate, spend speed
