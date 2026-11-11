@@ -11,3 +11,12 @@ Throwaway Claude Code mod that answered "What does the mod show at a glance?"
   draft notification.
 
 Load it with `claude --plugin-dir prototypes/readout-mod`, then `/ai-pal-proto`.
+
+## Failure states (hbfelizzola/ai-pal#11)
+
+`degraded-states.html` (open it in a browser, no build) draws nine failure
+scenarios side by side (nothing stored, stale, Reset passed, signed out,
+unreadable reply, one window missing, Nudge due on a stale reading) under four
+treatments, switched with the bottom bar or ← →: **A · Footnote**, **B · Fade**,
+**C · Status chip**, **D · Withhold**. The ring and bar drawing is ported from
+`hooks/register.tsx`.
