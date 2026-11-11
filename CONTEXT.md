@@ -5,7 +5,7 @@ A personal companion that shows how much of your Claude plan's usage you have le
 ## Language
 
 **Usage Window**:
-A fixed period over which a Claude plan meters usage against a cap, such as the 5-hour session limit or the weekly limit. It ends at a **Reset**.
+A fixed period over which a Claude plan meters usage against a cap, such as the 5-hour session limit, the weekly limit, or a model-specific weekly limit. It ends at a **Reset**.
 _Avoid_: Quota period, cycle, bucket
 
 **Reset**:
