@@ -1,0 +1,1 @@
+{ "name": "ai-pal-readout-prototype", "version": "0.1.0", "description": "PROTOTYPE, throw away: switchable usage readout variants for ai-pal", "types": "./types/index.d.ts" }
