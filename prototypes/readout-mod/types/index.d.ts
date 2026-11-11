@@ -5,8 +5,6 @@ declare module 'claude-code' {
     'ai-pal-readout-prototype': {
       variant: number
       scenario: number
-      isBandOn: boolean
-      live: Shaped<Reading[]>
       tick: number
     }
   }

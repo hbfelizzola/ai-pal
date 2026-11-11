@@ -20,3 +20,13 @@ unreadable reply, one window missing, Nudge due on a stale reading) under four
 treatments, switched with the bottom bar or ← →: **A · Footnote**, **B · Fade**,
 **C · Status chip**, **D · Withhold**. The ring and bar drawing is ported from
 `hooks/register.tsx`.
+
+## History and Burn Rate layouts (hbfelizzola/ai-pal#14)
+
+`hooks/register.tsx` now draws the winning split ring with four layouts under
+it for Lost Allowance history, Burn Rate and the projection, switched with
+◀ ▶: **A · Stacked by window** (column chart per window), **B · Table by
+metric** (text only), **C · Tiles** (2×2 grid), **D · Time bars** (projection
+first, history as dots). "History" cycles mock scenarios: Typical week, Quiet
+week (< 1 h Active Use), First days, Heavy user. The five readout variants and
+the band from #6 are in this branch's history (commit 87df395).
