@@ -37,5 +37,9 @@ Time you spend working with Claude, counted in 5-minute slots: a slot is active 
 _Avoid_: Usage time, session time, compute time
 
 **Burn Rate**:
-How fast you spend a Usage Window's cap during Active Use, measured as percent of the cap per hour of Active Use. Never measured in tokens.
+How fast you spend a Usage Window's cap during Active Use, measured as percent of the cap per hour of Active Use. For a weekly Usage Window it is stated per day instead: percent of the cap per day of your usual Active Use. Never measured in tokens.
 _Avoid_: Token rate, spend speed
+
+**Pace Call**:
+A judgment, per Usage Window, of whether your Burn Rate fits the Active Use you can expect before its Reset: **Use more** (some Unused Allowance would become Lost Allowance), **On track**, or **Ease off** (it would run out well before the Reset).
+_Avoid_: Verdict, call (alone: clashes with tool and model calls), recommendation
