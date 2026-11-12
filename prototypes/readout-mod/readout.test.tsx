@@ -39,13 +39,13 @@ test('the band draws four bars for every scenario, fresh and stale, and passes w
   const term = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'AbovePrompt', props: band, surface: 'terminal' })
   let hatched = false
   for (let s = 0; s < 5; s++) {
-    for (let k = 0; k < 2; k++) {
+    for (const flip of ['stale', 'speedbar', 'stale', 'speedbar']) {
       const d = JSON.stringify(await desk.drawn())
       expect(d).toContain('Svg')
       expect((d.match(/<rect x=/g) ?? []).length).toBeGreaterThanOrEqual(6)
       hatched ||= d.includes('url(#hatch)')
       expect(JSON.stringify(await term.drawn())).toContain('Weekly')
-      await ui.press({ key: 'stale' })
+      await ui.press({ key: flip })
     }
     await ui.press({ key: 'scn' })
   }

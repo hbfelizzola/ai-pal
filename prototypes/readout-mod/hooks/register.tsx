@@ -13,6 +13,7 @@ import type { Register } from 'claude-code'
 const PANE = 'ai-pal'
 const layout = atom({ plugin: 'ai-pal-readout-prototype', key: 'layout' } as const, 0)
 const isBandOn = atom({ plugin: 'ai-pal-readout-prototype', key: 'isBandOn' } as const, true)
+const isSpeedBar = atom({ plugin: 'ai-pal-readout-prototype', key: 'isSpeedBar' } as const, true)
 const isStale = atom({ plugin: 'ai-pal-readout-prototype', key: 'isStale' } as const, false)
 const scenario = atom({ plugin: 'ai-pal-readout-prototype', key: 'scenario' } as const, 0)
 const tick = atom({ plugin: 'ai-pal-readout-prototype', key: 'tick' } as const, 0)
@@ -116,6 +117,7 @@ type Stats = {
   resetMs: number
   burn?: number // undefined until ≥ 1 h of Active Use
   horizonH: number // Active Use you can expect before the Reset
+  perDay: number // usual hours of Active Use a day (rolling 7 days)
   needH?: number
   isOver: boolean
 }
@@ -135,6 +137,7 @@ function stats(s: Scenario, kind: Kind): Stats {
     // 5-hour: nonstop to the Reset is realistic. Weekly: your usual share of
     // Active Use (rolling 7 days) of the time to Reset.
     horizonH: kind === 'five_hour' ? inH : (inH * s.activeH) / 168,
+    perDay: s.activeH / 7,
     isOver: needH !== undefined && needH * H > resetMs,
   }
 }
@@ -166,6 +169,7 @@ type Span = [text: string, fill: string, isBold?: boolean]
 const tw = (spans: Span[], fs = 12) => spans.reduce((a, s) => a + s[0].length, 0) * fs * 0.56
 const tspans = (spans: Span[]) =>
   spans.map(([t, fill, b]) => `<tspan fill="${fill}"${b ? ' font-weight="650"' : ''}>${esc(t)}</tspan>`).join('')
+const plainSpans = (spans: Span[]) => spans.map(x => x[0]).join('')
 const gid = (st: Stats) => (st.kind === 'five_hour' ? 'b5' : 'b7')
 const HATCH = '<pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" fill="rgba(255,255,255,0.35)"/></pattern>'
 
@@ -173,16 +177,20 @@ function labels(st: Stats, win: Win, isStale: boolean): [top: Span[], bottom: Sp
   const t = isStale ? '~' : ''
   return [
     [[`${st.name} `, MUTED], [`${t}${st.left}%`, st.colors[1], true], [` · ${win.when}`, MUTED]],
-    st.burn === undefined
-      ? [['Burn Rate after 1 h', MUTED]]
-      : [['at ', MUTED], [`${rateText(st.burn)}%/h`, st.isOver ? OVER : st.colors[1], true]],
+    bottomLabel(st),
   ]
+}
+function bottomLabel(st: Stats): Span[] {
+  const sp = speed(st)
+  const v = verdict(st)
+  if (!sp || !v) return [['Burn Rate after 1 h', MUTED]]
+  return [[`${rateText(sp.rate)}${sp.unit}`, st.colors[1], true], [' · ', MUTED], [v.word, v.color, true]]
 }
 // Label width shared by both columns, so the four bars line up and match.
 const labelW = (cols: [Stats, Win][], isStale: boolean) =>
   Math.ceil(Math.max(...cols.flatMap(([st, win]) => labels(st, win, isStale).map(l => tw(l))))) + 10
 
-function column(x: number, w: number, lw: number, st: Stats, win: Win, isStale: boolean): string {
+function column(x: number, w: number, lw: number, st: Stats, win: Win, isStale: boolean, isSpeedBar: boolean): string {
   const [top, bottom] = labels(st, win, isStale)
   const bx = x + lw
   const bw = Math.max(40, w - lw)
@@ -195,8 +203,9 @@ function column(x: number, w: number, lw: number, st: Stats, win: Win, isStale: 
     `<rect x="${bx}" y="${y1 - BAR / 2}" width="${bw}" height="${BAR}" rx="${BAR / 2}" fill="${TRACK}"/>` +
     (fill > 0 ? `<rect x="${bx}" y="${y1 - BAR / 2}" width="${Math.max(BAR, fill)}" height="${BAR}" rx="${BAR / 2}" fill="url(#${gid(st)})"/>` : '') + `</g>`
 
-  // Row 2: the time bar; before a Burn Rate, a countdown of the time to Reset
-  // against the window's full length.
+  // Row 2: the speed bar (a flat speedometer: three zones, a marker at your
+  // rate) or the time bar; before a Burn Rate, a countdown of the time to
+  // Reset against the window's full length.
   const by = y2 - BAR / 2
   const leftH = st.resetMs / H
   let bar: string
@@ -208,6 +217,20 @@ function column(x: number, w: number, lw: number, st: Stats, win: Win, isStale: 
       `<rect x="${bx}" y="${by}" width="${tx}" height="${BAR}" rx="${BAR / 2}" fill="${TRACK}"/>` +
       `<line x1="${bx + tx}" y1="${by - 3}" x2="${bx + tx}" y2="${by + BAR + 3}" stroke="${MUTED}" stroke-width="1.2"/>`
     tip = `${st.name} · resets in ${untilText(st.resetMs)} · Burn Rate after 1 h of Active Use`
+  } else if (isSpeedBar) {
+    const sp = speed(st)!
+    const v = verdict(st)!
+    const max = niceMax(Math.max(sp.r2 * 1.5, sp.rate * 1.15))
+    const X = (val: number) => bx + (bw * Math.min(max, Math.max(0, val))) / max
+    const clip = `clip-${st.kind}`
+    const k1 = rateText(sp.r1), k2 = rateText(sp.r2)
+    bar = `<clipPath id="${clip}"><rect x="${bx}" y="${by}" width="${bw}" height="${BAR}" rx="${BAR / 2}"/></clipPath>` +
+      `<g clip-path="url(#${clip})"><rect x="${bx}" y="${by}" width="${bw}" height="${BAR}" fill="${TRACK}"/>` +
+      `<rect x="${bx}" y="${by}" width="${X(sp.r1) - bx}" height="${BAR}" fill="${OVER}" fill-opacity="0.92"/>` +
+      `<rect x="${X(sp.r1)}" y="${by}" width="${X(sp.r2) - X(sp.r1)}" height="${BAR}" fill="${st.colors[1]}" fill-opacity="0.92"/></g>` +
+      `<rect x="${X(sp.rate) - 2.5}" y="${by - 4}" width="5" height="${BAR + 8}" rx="2.5" fill="#FFFFFF" stroke="rgba(0,0,0,0.6)" stroke-width="1"/>`
+    tip = `${st.name} · ${rateText(sp.rate)}${sp.unit} ${sp.per} · ${v.word}: ${v.detail}` +
+      ` · zones: below ${k1}${sp.unit} use more, ${k1}–${k2} on track, above ${k2} ease off`
   } else {
     const need = st.needH
     const scale = (bw - 2) / (Math.max(leftH, need) * 1.03)
@@ -219,15 +242,14 @@ function column(x: number, w: number, lw: number, st: Stats, win: Win, isStale: 
         ? `<rect x="${bx + tx}" y="${by}" width="${(need - leftH) * scale}" height="${BAR}" fill="${OVER}" opacity="0.85"/><rect x="${bx + tx}" y="${by}" width="${(need - leftH) * scale}" height="${BAR}" fill="url(#hatch)"/>`
         : '') +
       `<line x1="${bx + tx}" y1="${by - 3}" x2="${bx + tx}" y2="${by + BAR + 3}" stroke="${MUTED}" stroke-width="1.2"/>`
-    const unused = Math.max(1, Math.round(st.left - st.burn * leftH))
-    tip = `${st.name} · at ${rateText(st.burn)}%/h of Active Use the ${st.left}% left lasts ~${hText(need)} h of use · resets in ${untilText(st.resetMs)}` +
-      (st.isOver ? ` · ~${unused}% would go unused even nonstop` : '')
+    const v = verdict(st)!
+    tip = `${st.name} · at ${rateText(st.burn)}%/h of Active Use the ${st.left}% left lasts ~${hText(need)} h of use · resets in ${untilText(st.resetMs)} · ${v.word}: ${v.detail}`
   }
   return pct + `<g><title>${esc(tip)}</title>${text(y2, bottom)}${bar}</g>`
 }
 
 const BAND_H = ROW * 2
-function bandSvg(W: number, five: Stats, week: Stats, w5: Win, w7: Win, isStale: boolean): string {
+function bandSvg(W: number, five: Stats, week: Stats, w5: Win, w7: Win, isStale: boolean, isSpeedBar = true): string {
   const w = W - (isStale ? AGE_W : 0)
   const half = (w - COL_GAP) / 2
   const lw = labelW([[five, w5], [week, w7]], isStale)
@@ -235,7 +257,7 @@ function bandSvg(W: number, five: Stats, week: Stats, w5: Win, w7: Win, isStale:
     ? `<text x="${W}" y="${BAND_H / 2}" text-anchor="end" dominant-baseline="central" ${FONT} font-size="11" fill="${OVER}"><title>Last Reading ${STALE_MIN} min ago</title>${STALE_MIN} min old</text>`
     : ''
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${BAND_H}" viewBox="0 0 ${W} ${BAND_H}"><defs>${grad('b5', WARM)}${grad('b7', COOL)}${HATCH}</defs>` +
-    `<g opacity="${isStale ? 0.45 : 1}">${column(0, half, lw, five, w5, isStale)}${column(half + COL_GAP, half, lw, week, w7, isStale)}</g>${age}</svg>`
+    `<g opacity="${isStale ? 0.45 : 1}">${column(0, half, lw, five, w5, isStale, isSpeedBar)}${column(half + COL_GAP, half, lw, week, w7, isStale, isSpeedBar)}</g>${age}</svg>`
 }
 
 // Terminal: no Svg, so a text line per window.
@@ -243,7 +265,7 @@ function bandText(five: Stats, week: Stats, w5: Win, w7: Win, isStale: boolean):
   const t = isStale ? '~' : ''
   const line = (st: Stats, win: Win) =>
     `${st.name} ${t}${st.left}% · ${win.when} · ` +
-    (st.burn === undefined ? 'Burn Rate after 1 h of Active Use' : `at ${rateText(st.burn)}%/h lasts ~${hText(st.needH ?? 0)} h of use${st.isOver ? ' (won\'t all go)' : ''}`)
+    (st.burn === undefined ? 'Burn Rate after 1 h of Active Use' : `${plainSpans(bottomLabel(st))} (${verdict(st)?.detail ?? ''})`)
   return [line(five, w5), line(week, w7), ...(isStale ? [`${STALE_MIN} min old`] : [])]
 }
 
@@ -320,9 +342,20 @@ function verdict(st: Stats): Verdict | undefined {
     return { key: 'track', word: 'On track', hint: 'keep this pace', color: st.colors[1], detail: `spends it in ~${hText(st.needH)} h of use · ${until} left` }
   return { key: 'ease', word: 'Ease off', hint: 'or a lighter model', color: EASE, detail: `runs out after ~${hText(st.needH)} h of use · ${until} left` }
 }
-const zones = (st: Stats) => {
-  const r1 = st.left / Math.max(st.horizonH, 0.01)
-  return { r1, r2: 2 * r1 }
+// The rate in the unit each window reads best in, with the zone edges.
+// 5-hour: %/h of Active Use; r1 = left ÷ time to Reset (nonstop).
+// Weekly: %/day at your usual Active Use (Burn Rate × usual hours a day);
+// r1 = left ÷ days to Reset. Either way rate ÷ r1 = 1 ÷ duty, so the zones
+// agree with verdict(). r2 = 2 × r1.
+type Speed = { rate: number; r1: number; r2: number; unit: string; per: string }
+function speed(st: Stats): Speed | undefined {
+  if (st.burn === undefined) return undefined
+  if (st.kind === 'five_hour') {
+    const r1 = st.left / Math.max(st.horizonH, 0.01)
+    return { rate: st.burn, r1, r2: 2 * r1, unit: '%/h', per: 'of Active Use' }
+  }
+  const r1 = st.left / Math.max(st.resetMs / H / 24, 0.01)
+  return { rate: st.burn * st.perDay, r1, r2: 2 * r1, unit: '%/day', per: 'at your usual Active Use' }
 }
 const niceMax = (v: number) => {
   const step = v <= 10 ? 2 : v <= 50 ? 10 : 20
@@ -339,8 +372,9 @@ function gaugeSvg(size: number, st: Stats): [svg: string, height: number] {
   const cy = r + sw / 2 + pad
   const height = Math.ceil(cy + r * 0.5 + sw / 2 + 16 * k)
   const v = verdict(st)
-  const { r1, r2 } = zones(st)
-  const max = niceMax(Math.max(r2 * 1.5, (st.burn ?? 0) * 1.15))
+  const sp = speed(st)
+  const { r1, r2, rate, unit } = sp ?? { r1: 0, r2: 0, rate: 0, unit: '%/h' }
+  const max = niceMax(Math.max(r2 * 1.5, rate * 1.15))
   const ang = (val: number) => -SWEEP / 2 + (SWEEP * Math.min(max, Math.max(0, val))) / max
   const pt = (deg: number, rad = r) => {
     const a = ((deg - 90) * Math.PI) / 180
@@ -362,34 +396,36 @@ function gaugeSvg(size: number, st: Stats): [svg: string, height: number] {
     dial = `<path d="${arc(-SWEEP / 2, SWEEP / 2)}" fill="none" stroke="${TRACK}" stroke-width="${sw}"/>`
   } else {
     dial =
-      zone(0, r1, OVER, `Below ${k1}%/h: some of the ${st.left}% left goes unused`, 0.75) +
-      zone(r1, r2, st.colors[1], `${k1}–${k2}%/h: spends it in over half the Active Use you can expect before the Reset`, 0.85) +
-      zone(r2, max, TRACK, `Above ${k2}%/h: runs out with time to spare`) +
+      zone(0, r1, OVER, `Below ${k1}${unit}: some of the ${st.left}% left goes unused`, 0.92) +
+      zone(r1, r2, st.colors[1], `${k1}–${k2}${unit}: spends it in over half the Active Use you can expect before the Reset`, 0.92) +
+      zone(r2, max, TRACK, `Above ${k2}${unit}: runs out with time to spare`) +
       label(r1, k1) + label(r2, k2)
   }
   const end = (val: number, text: string) => {
     const [x, y] = pt(ang(val), r)
     return `<text x="${x.toFixed(1)}" y="${(y + sw / 2 + 8 * k).toFixed(1)}" text-anchor="middle" dominant-baseline="central" ${FONT} font-size="${9.5 * k}" fill="${MUTED}">${esc(text)}</text>`
   }
-  const ends = v ? end(0, "0") + end(max, `${max}%/h`) : ""
+  const ends = v ? end(0, "0") + end(max, `${max}${unit}`) : ""
   let pointer = ''
   if (v) {
-    const a = ang(st.burn ?? 0)
+    const a = ang(rate)
     const [x1, y1] = pt(a, r - sw / 2 - 7 * k)
     const [x2, y2] = pt(a, r + sw / 2 + 1)
-    pointer = `<g><title>${esc(`Burn Rate ${rateText(st.burn ?? 0)}%/h of Active Use`)}</title>` +
-      `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="rgba(0,0,0,0.35)" stroke-width="${6 * k}" stroke-linecap="round"/>` +
-      `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${v.color}" stroke-width="${3.5 * k}" stroke-linecap="round"/>` +
-      `<circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="${3.5 * k}" fill="${v.color}"/></g>`
+    pointer = `<g><title>${esc(`${st.name} · ${rateText(rate)}${unit} ${sp?.per ?? ''} · ${v.word}: ${v.detail}`)}</title>` +
+      `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="rgba(0,0,0,0.6)" stroke-width="${6 * k}" stroke-linecap="round"/>` +
+      `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#FFFFFF" stroke-width="${3.5 * k}" stroke-linecap="round"/>` +
+      `<circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="${3.5 * k}" fill="#FFFFFF" stroke="rgba(0,0,0,0.6)" stroke-width="1"/></g>`
   }
   const centre = v
-    ? `<text x="${cx}" y="${cy - 12 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-weight="650" font-size="${26 * k}" fill="${st.colors[1]}">${rateText(st.burn ?? 0)}<tspan font-size="${13 * k}" font-weight="500" fill="${MUTED}">%/h</tspan></text>` +
+    ? `<text x="${cx}" y="${cy - 12 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-weight="650" font-size="${26 * k}" fill="${st.colors[1]}">${rateText(rate)}<tspan font-size="${13 * k}" font-weight="500" fill="${MUTED}">${unit}</tspan></text>` +
       `<text x="${cx}" y="${cy + 14 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-weight="650" font-size="${14 * k}" fill="${v.color}">${esc(v.word)}</text>` +
       `<text x="${cx}" y="${cy + 30 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-size="${10.5 * k}" fill="${MUTED}">${esc(v.hint)}</text>`
     : `<text x="${cx}" y="${cy - 8 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-weight="650" font-size="${24 * k}" fill="${MUTED}">—</text>` +
       `<text x="${cx}" y="${cy + 14 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-size="${10.5 * k}" fill="${MUTED}">Burn Rate after</text>` +
       `<text x="${cx}" y="${cy + 28 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-size="${10.5 * k}" fill="${MUTED}">1 h of Active Use</text>`
-  return [`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${height}" viewBox="0 0 ${size} ${height}">${dial}${ends}${pointer}${centre}</svg>`, height]
+  // The why, on hover anywhere on the gauge (zones and needle carry their own).
+  const why = v && sp ? `${st.name} · ${rateText(rate)}${unit} ${sp.per} · ${v.word}: ${v.detail}` : `${st.name} · Burn Rate after 1 h of Active Use`
+  return [`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${height}" viewBox="0 0 ${size} ${height}"><rect width="${size}" height="${height}" fill="transparent"><title>${esc(why)}</title></rect>${dial}${ends}${pointer}<g><title>${esc(why)}</title>${centre}</g></svg>`, height]
 }
 
 // ---------- the pane ----------
@@ -425,7 +461,7 @@ export const register: Register = on => {
     const W = Math.max(360, Math.floor(e.props.bodyColumns * CELL_PX) - 4)
     return (
       <Box flexDirection="row">
-        <Svg isInteractive source={bandSvg(W, five, week, w5, w7, stale)} alt={lines.join(' · ')} width={W} height={BAND_H} />
+        <Svg isInteractive source={bandSvg(W, five, week, w5, w7, stale, await read($, isSpeedBar))} alt={lines.join(' · ')} width={W} height={BAND_H} />
       </Box>
     )
   })
@@ -436,6 +472,7 @@ export const register: Register = on => {
     const now = await $.clock.now()
     const v = await read($, layout)
     const bandOn = await read($, isBandOn)
+    const speedBar = await read($, isSpeedBar)
     const stale = await read($, isStale)
     const s = SCENARIOS[(await read($, scenario)) % SCENARIOS.length]!
     const five = stats(s, 'five_hour')
@@ -449,16 +486,16 @@ export const register: Register = on => {
     const gauge = (st: Stats, size: number, isNamed: boolean) => {
       const [source, gh] = gaugeSvg(size, st)
       const vd = verdict(st)
-      const alt = vd ? `${st.name} Burn Rate ${rateText(st.burn ?? 0)}%/h: ${vd.word}, ${vd.hint}` : `${st.name}: Burn Rate after 1 h of Active Use`
+      const sp = speed(st)
+      const alt = vd && sp ? `${st.name} Burn Rate ${rateText(sp.rate)}${sp.unit}: ${vd.word}, ${vd.hint}. ${vd.detail}` : `${st.name}: Burn Rate after 1 h of Active Use`
       return (
         <Box flexDirection="column" alignItems="center" gap={0}>
           {isNamed && <Text weight="semibold" size="footnote" color={st.colors[1]}>{st.name}</Text>}
           {e.surface === 'terminal'
-            ? (vd
-              ? <Text><Text bold>{rateText(st.burn ?? 0)}%/h</Text> · <Text color={vd.color} bold>{vd.word}</Text> <Text dimColor>{vd.hint}</Text></Text>
+            ? (vd && sp
+              ? <Text><Text bold>{rateText(sp.rate)}{sp.unit}</Text> · <Text color={vd.color} bold>{vd.word}</Text> <Text dimColor>{vd.hint}</Text></Text>
               : <Text dimColor>Burn Rate after 1 h of Active Use</Text>)
             : svg(source, alt, size, gh)}
-          {vd && <Text size="caption" color={MUTED} tabular>{vd.detail}</Text>}
         </Box>
       )
     }
@@ -476,6 +513,7 @@ export const register: Register = on => {
         <Box flexDirection="row" gap={1} flexWrap="wrap">
           <Button key="scn" variant="secondary" label={`Data: ${s.name}`} onPress={() => update($, scenario, n => (n + 1) % SCENARIOS.length)} />
           <Button key="stale" variant="secondary" label={stale ? `Reading: ${STALE_MIN} min old` : 'Reading: fresh'} onPress={() => update($, isStale, b => !b)} />
+          <Button key="speedbar" variant="secondary" label={speedBar ? 'Band: speed bars' : 'Band: time bars'} onPress={() => update($, isSpeedBar, b => !b)} />
           <Button key="bandon" variant="secondary" label={bandOn ? 'Band: on' : 'Band: off'} onPress={() => update($, isBandOn, b => !b)} />
         </Box>
         <Box flexDirection="column" alignItems="center" marginTop={1}>

@@ -43,16 +43,20 @@ Band layouts with wordings were tried first (commit 7a184d3). Where it landed:
 
 - **Band**: four bars across the full width, a column per window (5-hour
   left, weekly right). Top row: Unused Allowance (`5-hour 62% · 2h 0m`).
-  Bottom row: the time bar (`at 18%/h`): grey track = time to Reset, window
-  gradient = Active Use the rest lasts at that Burn Rate, amber hatching past
-  the Reset tick when it won't fit. Labels sit inline, sharing one width so the
-  four bars line up. Under 1 h of Active Use the time bar is a countdown with
-  `Burn Rate after 1 h`. A stale Reading fades the band, adds `~`, and appends
-  `42 min old` in amber.
+  Bottom row: a **speed bar**, a flat speedometer: three zones (amber = use
+  more, window colour = on track, grey = ease off) and a white marker at your
+  rate, labelled with the rate and the call (`18%/h · Use more`). The weekly
+  window reads in **%/day** (Burn Rate × usual hours of Active Use a day), its
+  zone edge being % left ÷ days to Reset. The why (`~26% would go unused even
+  nonstop · resets in 2h 0m`) is on hover only. "Band: time bars" swaps in the
+  earlier time bar for comparison. Labels share one width so the four bars
+  line up. Under 1 h of Active Use the bottom bar is a countdown with `Burn
+  Rate after 1 h`. A stale Reading fades the band, adds `~`, and appends `42
+  min old` in amber.
 - **Pane**: the ring, then a **Burn Rate speedometer**: needle at the Burn
-  Rate (%/h of Active Use), three zones, and in the centre one of three calls:
+  Rate (5-hour %/h, weekly %/day), three zones, and in the centre one of three calls:
   **Use more** · or a bigger model, **On track** · keep this pace, **Ease off**
-  · or a lighter model, with a caption saying why. Zones: r1 = Unused Allowance
+  · or a lighter model; the why is on hover. Zones: r1 = Unused Allowance
   ÷ the Active Use you can expect before the Reset (5-hour: the time to Reset,
   nonstop; weekly: your usual share of Active Use, rolling 7 days, of the time
   to Reset); r2 = 2 × r1.

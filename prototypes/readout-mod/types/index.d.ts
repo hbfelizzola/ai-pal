@@ -6,6 +6,7 @@ declare module 'claude-code' {
       layout: number
       isBandOn: boolean
       isStale: boolean
+      isSpeedBar: boolean
       scenario: number
       tick: number
     }
