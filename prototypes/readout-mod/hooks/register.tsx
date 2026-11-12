@@ -11,8 +11,8 @@ import type { Reading } from '../types'
 const PANE = 'ai-pal'
 const variant = atom({ plugin: 'ai-pal-readout-prototype', key: 'variant' } as const, 3)
 const scenario = atom({ plugin: 'ai-pal-readout-prototype', key: 'scenario' } as const, 0)
-const moreFive = atom({ plugin: 'ai-pal-readout-prototype', key: 'moreFive' } as const, false)
-const moreWeek = atom({ plugin: 'ai-pal-readout-prototype', key: 'moreWeek' } as const, false)
+const shownFive = atom({ plugin: 'ai-pal-readout-prototype', key: 'shownFive' } as const, 5)
+const shownWeek = atom({ plugin: 'ai-pal-readout-prototype', key: 'shownWeek' } as const, 5)
 const tick = atom({ plugin: 'ai-pal-readout-prototype', key: 'tick' } as const, 0)
 
 const VARIANTS = ['Stacked by window', 'Table by metric', 'Tiles', 'Time bars']
@@ -241,6 +241,39 @@ function timeBarSvg(w: number, st: Stats): string {
     `<text x="${Math.min(tx, w - 2)}" y="6" text-anchor="${tx > w - 40 ? 'end' : 'middle'}" ${FONT} font-size="9" fill="${MUTED}">Reset</text></g></svg>`
 }
 
+// One row per past period, newest first: when it reset, a bar of the cap with
+// the Lost Allowance filled in the window's colour, and the figure. Upper
+// bound: dashed outline. No data: empty track. Reset early: ↺ after the figure.
+const ROW_H = 20
+function periodRowsSvg(w: number, st: Stats, rows: Past[], now: number): string {
+  const labelW = 70, figW = 78
+  const bw = w - labelW - figW
+  const id = `r${st.kind}`
+  const color = st.colors[1]
+  const when = (p: Past) => {
+    const d = new Date(now - p.agoH * H)
+    const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]
+    return st.kind === 'five_hour'
+      ? `${day} ${String(d.getHours()).padStart(2, '0')}:00`
+      : `${day} ${d.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]}`
+  }
+  const out = rows.map((p, i) => {
+    const y = i * ROW_H
+    const cy = y + ROW_H / 2
+    const len = p.lost === undefined ? 0 : Math.max(3, (bw * p.lost) / 100)
+    const bar = p.lost === undefined ? ''
+      : p.isUpper
+        ? `<rect x="${labelW + 0.5}" y="${cy - 3.5}" width="${len - 1}" height="7" rx="3.5" fill="${color}" fill-opacity="0.18" stroke="${color}" stroke-dasharray="2 2"/>`
+        : `<rect x="${labelW}" y="${cy - 4}" width="${len}" height="8" rx="4" fill="url(#${id})"/>`
+    const fig = p.lost === undefined ? 'no data' : `${p.isUpper ? '≤ ' : ''}${p.lost}% lost${p.isEarly ? ' ↺' : ''}`
+    return `<g><title>${esc(pastTip(st, p, now))}</title><rect x="0" y="${y}" width="${w}" height="${ROW_H}" fill="transparent"/>` +
+      `<text x="0" y="${cy}" dominant-baseline="central" ${FONT} font-size="10.5" fill="${MUTED}">${esc(when(p))}</text>` +
+      `<rect x="${labelW}" y="${cy - 4}" width="${bw}" height="8" rx="4" fill="${TRACK}"/>${bar}` +
+      `<text x="${w}" y="${cy}" text-anchor="end" dominant-baseline="central" ${FONT} font-size="10.5" fill="${p.lost === undefined ? MUTED : color}" ${p.lost === undefined ? '' : 'font-weight="600"'}>${esc(fig)}</text></g>`
+  })
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${rows.length * ROW_H}" viewBox="0 0 ${w} ${rows.length * ROW_H}"><defs>${grad(id, st.colors)}</defs>${out.join('')}</svg>`
+}
+
 // The winning ring from #6, unchanged.
 type Win = { pct: number; tip: string; when: string; isDue: boolean }
 function splitRingSvg(size: number, five?: Win, week?: Win): string {
@@ -423,49 +456,58 @@ export const register: Register = on => {
     } else {
       // D · Time bars, projection first: per window a bar of time to Reset with
       // the Active Use needed laid over it; overrun spills past the Reset tick
-      // in amber. Collapsed, history is a dot strip + average; "More" under each
-      // window opens its full history below: column chart, series, legend.
-      const isOpen = { five_hour: await read($, moreFive), seven_day: await read($, moreWeek) }
+      // in amber. Under it, the last 5 past periods as rows (newest first), the
+      // average below them, and "More" adding 5 older periods at a time.
+      const shown = { five_hour: await read($, shownFive), seven_day: await read($, shownWeek) }
       body = (
         <Box flexDirection="column" gap={2}>
-          {sectionTitle('Time to spend what is left')}
-          {both.map(st => (
-            <Box flexDirection="column" gap={0}>
-              <Box flexDirection="row" justifyContent="space-between">
-                <Text weight="semibold" size="footnote" color={st.colors[1]}>{st.name}</Text>
-                {st.burn === undefined ? <Text /> : (
-                  <Text size="footnote" tabular color={st.isOver ? OVER : MUTED}>{projText(st)}</Text>
+          {both.map(st => {
+            const newest = [...st.past].reverse()
+            const n = Math.min(shown[st.kind], newest.length)
+            const rows = newest.slice(0, n)
+            return (
+              <Box flexDirection="column" gap={0}>
+                <Box flexDirection="row" justifyContent="space-between">
+                  <Text weight="semibold" size="footnote" color={st.colors[1]}>{st.name}</Text>
+                  {st.burn === undefined ? <Text /> : (
+                    <Text size="footnote" tabular color={st.isOver ? OVER : MUTED}>{projText(st)}</Text>
+                  )}
+                </Box>
+                {st.burn === undefined ? noBurn : svg(timeBarSvg(W, st), `${st.name}: ${projText(st)}`, W, 26)}
+                {st.burn !== undefined && <Text size="caption" color={MUTED} tabular>at {rateText(st.burn)}%/h of Active Use</Text>}
+                <Box marginTop={1}><Text size="caption" color={MUTED} weight="semibold">LOST AT RESET</Text></Box>
+                {rows.length === 0
+                  ? <Text size="caption" color={MUTED}>no past windows yet</Text>
+                  : svg(periodRowsSvg(W, st, rows, now), `${st.name} Lost Allowance, last ${rows.length} periods`, W, rows.length * ROW_H)}
+                {st.past.length > 0 && (
+                  <Box flexDirection="row" justifyContent="space-between" marginTop={0}>
+                    <Text size="footnote" tabular weight="semibold">{st.avg === undefined ? 'avg —' : `avg ${st.avg}% lost`}</Text>
+                    <Text size="caption" color={MUTED} tabular>{`${st.exact} of ${st.past.length} windows · ${st.kind === 'five_hour' ? 'last 7 days' : 'last 4 weeks'}`}</Text>
+                  </Box>
+                )}
+                {(n < newest.length || n > 5) && (
+                  <Box flexDirection="row" gap={1} marginTop={1}>
+                    {n < newest.length && (
+                      <Button
+                        key={`more-${st.kind}`}
+                        variant="secondary"
+                        label={`More (${newest.length - n} older)`}
+                        onPress={() => (st.kind === 'five_hour' ? update($, shownFive, k => k + 5) : update($, shownWeek, k => k + 5))}
+                      />
+                    )}
+                    {n > 5 && (
+                      <Button
+                        key={`less-${st.kind}`}
+                        variant="secondary"
+                        label="Show 5"
+                        onPress={() => (st.kind === 'five_hour' ? update($, shownFive, () => 5) : update($, shownWeek, () => 5))}
+                      />
+                    )}
+                  </Box>
                 )}
               </Box>
-              {st.burn === undefined ? noBurn : svg(timeBarSvg(W, st), `${st.name}: ${projText(st)}`, W, 26)}
-              {st.burn !== undefined && <Text size="caption" color={MUTED} tabular>at {rateText(st.burn)}%/h of Active Use</Text>}
-              {!isOpen[st.kind] && (
-                <Box flexDirection="row" gap={1} alignItems="center" marginTop={1}>
-                  {svg(dotsSvg(Math.min(150, W - 160), st, now), `${st.name} Lost Allowance per past window`, Math.min(150, W - 160), 16)}
-                  <Text size="caption" color={MUTED} tabular>{avgText(st)}</Text>
-                </Box>
-              )}
-              {isOpen[st.kind] && (
-                <Box flexDirection="column" marginTop={1}>
-                  <Box flexDirection="row" justifyContent="space-between">
-                    <Text size="caption" color={MUTED} weight="semibold">LOST AT RESET</Text>
-                    <Text size="caption" color={MUTED} tabular>{avgText(st)}</Text>
-                  </Box>
-                  {svg(columnsSvg(W, 64, st, now, axisOf(st)), `${st.name} Lost Allowance per past window`, W, 64)}
-                  <Text mono size="caption" color={MUTED}>{st.past.length ? st.past.map(entryText).join(' ') : '—'}</Text>
-                  <Text size="caption" color={MUTED}>≤ upper bound · – no data · ↺ reset early</Text>
-                </Box>
-              )}
-              <Box flexDirection="row" marginTop={1}>
-                <Button
-                  key={`more-${st.kind}`}
-                  variant="secondary"
-                  label={isOpen[st.kind] ? 'Less' : 'More'}
-                  onPress={() => (st.kind === 'five_hour' ? update($, moreFive, b => !b) : update($, moreWeek, b => !b))}
-                />
-              </Box>
-            </Box>
-          ))}
+            )
+          })}
         </Box>
       )
     }

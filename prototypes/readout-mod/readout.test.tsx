@@ -15,11 +15,11 @@ test('every layout x history scenario draws on desktop', async ($, on) => {
     }
     await ui.press({ key: 'scn' })
   }
-  // Back on D (the default): open both More sections, then close them.
+  // Back on D (the default), Typical week: 12 past 5-hour periods, 5 shown.
+  const count = async () => (JSON.stringify(await ui.drawn()).match(/% lost|no data/g) ?? []).length
+  const before = await count()
   await ui.press({ key: 'more-five_hour' })
-  await ui.press({ key: 'more-seven_day' })
-  expect(JSON.stringify(await ui.drawn())).toContain('LOST AT RESET')
-  await ui.press({ key: 'more-five_hour' })
-  await ui.press({ key: 'more-seven_day' })
-  expect(JSON.stringify(await ui.drawn())).not.toContain('LOST AT RESET')
+  expect(await count()).toBeGreaterThan(before)
+  await ui.press({ key: 'less-five_hour' })
+  expect(await count()).toBe(before)
 })
