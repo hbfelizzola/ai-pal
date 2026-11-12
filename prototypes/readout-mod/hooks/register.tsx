@@ -223,7 +223,7 @@ function dotsSvg(w: number, st: Stats, now: number): string {
 // Time bar: grey track = time to Reset, window-coloured fill = Active Use
 // needed to spend what's left. Past the Reset tick, the overrun is amber.
 function timeBarSvg(w: number, st: Stats): string {
-  const h = 26
+  const h = 28
   const leftH = st.resetMs / H
   const need = st.needH ?? 0
   const scale = (w - 2) / (Math.max(leftH, need) * 1.04)
@@ -231,20 +231,20 @@ function timeBarSvg(w: number, st: Stats): string {
   const id = `t${st.kind}`
   const fill = Math.min(need, leftH) * scale
   const over = need > leftH
-    ? `<rect x="${tx}" y="12" width="${(need - leftH) * scale}" height="8" fill="${OVER}" opacity="0.85"/><rect x="${tx}" y="12" width="${(need - leftH) * scale}" height="8" fill="url(#hatch)"/>`
+    ? `<rect x="${tx}" y="11" width="${(need - leftH) * scale}" height="11" fill="${OVER}" opacity="0.85"/><rect x="${tx}" y="11" width="${(need - leftH) * scale}" height="11" fill="url(#hatch)"/>`
     : ''
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs>${grad(id, st.colors)}<pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" fill="rgba(255,255,255,0.35)"/></pattern></defs>` +
     `<g><title>${esc(`${st.name} · ${projText(st)}`)}</title>` +
-    `<rect x="0" y="12" width="${tx}" height="8" rx="4" fill="${TRACK}"/>` +
-    `<rect x="0" y="12" width="${Math.max(6, fill)}" height="8" rx="4" fill="url(#${id})"/>${over}` +
-    `<line x1="${tx}" y1="8" x2="${tx}" y2="23" stroke="${MUTED}" stroke-width="1.2"/>` +
+    `<rect x="0" y="11" width="${tx}" height="11" rx="5.5" fill="${TRACK}"/>` +
+    `<rect x="0" y="11" width="${Math.max(8, fill)}" height="11" rx="5.5" fill="url(#${id})"/>${over}` +
+    `<line x1="${tx}" y1="7" x2="${tx}" y2="26" stroke="${MUTED}" stroke-width="1.2"/>` +
     `<text x="${Math.min(tx, w - 2)}" y="6" text-anchor="${tx > w - 40 ? 'end' : 'middle'}" ${FONT} font-size="9" fill="${MUTED}">Reset</text></g></svg>`
 }
 
 // One row per past period, newest first: when it reset, a bar of the cap with
 // the Lost Allowance filled in the window's colour, and the figure. Upper
 // bound: dashed outline. No data: empty track. Reset early: ↺ after the figure.
-const ROW_H = 20
+const ROW_H = 22
 function periodRowsSvg(w: number, st: Stats, rows: Past[], now: number): string {
   const labelW = 70, figW = 78
   const bw = w - labelW - figW
@@ -260,15 +260,15 @@ function periodRowsSvg(w: number, st: Stats, rows: Past[], now: number): string 
   const out = rows.map((p, i) => {
     const y = i * ROW_H
     const cy = y + ROW_H / 2
-    const len = p.lost === undefined ? 0 : Math.max(3, (bw * p.lost) / 100)
+    const len = p.lost === undefined ? 0 : Math.max(4, (bw * p.lost) / 100)
     const bar = p.lost === undefined ? ''
       : p.isUpper
-        ? `<rect x="${labelW + 0.5}" y="${cy - 3.5}" width="${len - 1}" height="7" rx="3.5" fill="${color}" fill-opacity="0.18" stroke="${color}" stroke-dasharray="2 2"/>`
-        : `<rect x="${labelW}" y="${cy - 4}" width="${len}" height="8" rx="4" fill="url(#${id})"/>`
+        ? `<rect x="${labelW + 0.5}" y="${cy - 5}" width="${len - 1}" height="10" rx="5" fill="${color}" fill-opacity="0.18" stroke="${color}" stroke-dasharray="2 2"/>`
+        : `<rect x="${labelW}" y="${cy - 5.5}" width="${len}" height="11" rx="5.5" fill="url(#${id})"/>`
     const fig = p.lost === undefined ? 'no data' : `${p.isUpper ? '≤ ' : ''}${p.lost}% lost${p.isEarly ? ' ↺' : ''}`
     return `<g><title>${esc(pastTip(st, p, now))}</title><rect x="0" y="${y}" width="${w}" height="${ROW_H}" fill="transparent"/>` +
       `<text x="0" y="${cy}" dominant-baseline="central" ${FONT} font-size="10.5" fill="${MUTED}">${esc(when(p))}</text>` +
-      `<rect x="${labelW}" y="${cy - 4}" width="${bw}" height="8" rx="4" fill="${TRACK}"/>${bar}` +
+      `<rect x="${labelW}" y="${cy - 5.5}" width="${bw}" height="11" rx="5.5" fill="${TRACK}"/>${bar}` +
       `<text x="${w}" y="${cy}" text-anchor="end" dominant-baseline="central" ${FONT} font-size="10.5" fill="${p.lost === undefined ? MUTED : color}" ${p.lost === undefined ? '' : 'font-weight="600"'}>${esc(fig)}</text></g>`
   })
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${rows.length * ROW_H}" viewBox="0 0 ${w} ${rows.length * ROW_H}"><defs>${grad(id, st.colors)}</defs>${out.join('')}</svg>`
@@ -277,10 +277,12 @@ function periodRowsSvg(w: number, st: Stats, rows: Past[], now: number): string 
 // The winning ring from #6, unchanged.
 type Win = { pct: number; tip: string; when: string; isDue: boolean }
 function splitRingSvg(size: number, five?: Win, week?: Win): string {
-  const sw = size * 0.075
+  const sw = size * 0.09
   const m = size / 2
   const r = (size - sw) / 2 - 1
-  const gap = 10
+  // Degrees between the arcs, measured past the round caps (which reach
+  // sw/2 beyond each end), so the visible gap at 10 and 2 o'clock stays ~9°.
+  const gap = 9 + ((sw / r) * 180) / Math.PI
   const pt = (deg: number) => {
     const a = ((deg - 90) * Math.PI) / 180
     return `${(m + r * Math.cos(a)).toFixed(2)} ${(m + r * Math.sin(a)).toFixed(2)}`
@@ -473,7 +475,7 @@ export const register: Register = on => {
                     <Text size="footnote" tabular color={st.isOver ? OVER : MUTED}>{projText(st)}</Text>
                   )}
                 </Box>
-                {st.burn === undefined ? noBurn : svg(timeBarSvg(W, st), `${st.name}: ${projText(st)}`, W, 26)}
+                {st.burn === undefined ? noBurn : svg(timeBarSvg(W, st), `${st.name}: ${projText(st)}`, W, 28)}
                 {st.burn !== undefined && <Text size="caption" color={MUTED} tabular>at {rateText(st.burn)}%/h of Active Use</Text>}
                 <Box marginTop={1}><Text size="caption" color={MUTED} weight="semibold">LOST AT RESET</Text></Box>
                 {rows.length === 0
