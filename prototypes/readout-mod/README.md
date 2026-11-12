@@ -45,7 +45,16 @@ layouts, **Data** cycles the mock scenarios (Typical week overruns the 5-hour
 Reset, Heavy user fits, Quiet week has < 1 h of Active Use, First days just
 overruns), **Reading** toggles a 42-min-old stale Reading, **Under 1 h** picks
 what shows before there's a Burn Rate (the % bar or a countdown to Reset), and
+**Wording** cycles three ways to say what the time bar means, and **Burn
+Rate** puts `at 18%/h of Active Use` under the bar (default) or in the label.
 **Band** turns it off.
+
+Wordings (they replace `~3.4 h needed` in the band and the pane):
+1. **Use more / On track**: `Use more · ~26% goes unused even nonstop`, or
+   `On track · spent after ~0.6 h of use`.
+2. **Rate needed**: `spending it needs 31%/h`, with `you're at 18%/h of Active Use`.
+3. **Hours of use left**: `~3.4 h of use left · won't fit in 2h 0m`, or
+   `· fits in 3h 0m`.
 
 - **A · Beside**: 5-hour time bar left, weekly Unused Allowance bar right.
 - **B · Whole band**: 5-hour time bar across the band, weekly as a text chip.

@@ -7,6 +7,8 @@ declare module 'claude-code' {
       isBandOn: boolean
       isStale: boolean
       isCountdown: boolean
+      wording: number
+      isBurnBelow: boolean
       scenario: number
       tick: number
       shownFive: number

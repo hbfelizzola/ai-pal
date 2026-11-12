@@ -20,7 +20,7 @@ test('every band layout x data x stale x under-1h draws on desktop and terminal'
   const desk = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'AbovePrompt', props: band, surface: 'desktop' })
   const term = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'AbovePrompt', props: band, surface: 'terminal' })
   for (let s = 0; s < 4; s++) {
-    for (const flip of ['stale', 'noburn', 'stale', 'noburn']) {
+    for (const flip of ['stale', 'noburn', 'wording', 'burnpos', 'wording', 'stale', 'wording', 'noburn', 'burnpos']) {
       for (let v = 0; v < 5; v++) {
         expect(await desk.drawn()).toMatchObject({ type: 'Box' })
         expect(await term.drawn()).toMatchObject({ type: 'Box' })
