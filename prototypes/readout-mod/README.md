@@ -36,3 +36,22 @@ periods as rows (newest first), the average below them, and **More** adding 5
 older periods at a time (**Show 5** returns). The ring and all bars were made
 thicker (ring stroke 9% of its size, bars 11px) and the ring's two arc gaps at
 10 and 2 o'clock widened to ~9° clear of the round caps.
+
+## The band above the prompt (hbfelizzola/ai-pal#17)
+
+The band (`AbovePrompt`) is back, now with the 5-hour **time bar** from #14 at
+band height (8px). The pane's top section switches it: ◀ ▶ step through five
+layouts, **Data** cycles the mock scenarios (Typical week overruns the 5-hour
+Reset, Heavy user fits, Quiet week has < 1 h of Active Use, First days just
+overruns), **Reading** toggles a 42-min-old stale Reading, **Under 1 h** picks
+what shows before there's a Burn Rate (the % bar or a countdown to Reset), and
+**Band** turns it off.
+
+- **A · Beside**: 5-hour time bar left, weekly Unused Allowance bar right.
+- **B · Whole band**: 5-hour time bar across the band, weekly as a text chip.
+- **C · Two rows**: #6's two bars, the 5-hour time bar under them.
+- **D · Two time bars**: 5-hour and weekly time bars side by side.
+- **E · Time bar only**: weekly leaves the band.
+
+The history-layout switch from #14 is gone: the pane draws the winner (D · Time
+bars) under the band controls.

@@ -3,7 +3,10 @@ export type Reading = { kind: string; percentUsed: number; resetsAt?: string }
 declare module 'claude-code' {
   interface PluginState {
     'ai-pal-readout-prototype': {
-      variant: number
+      band: number
+      isBandOn: boolean
+      isStale: boolean
+      isCountdown: boolean
       scenario: number
       tick: number
       shownFive: number
