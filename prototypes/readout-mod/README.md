@@ -30,3 +30,9 @@ metric** (text only), **C · Tiles** (2×2 grid), **D · Time bars** (projection
 first, history as dots). "History" cycles mock scenarios: Typical week, Quiet
 week (< 1 h Active Use), First days, Heavy user. The five readout variants and
 the band from #6 are in this branch's history (commit 87df395).
+
+**D · Time bars won**, reworked: under each window's time bar, the last 5 past
+periods as rows (newest first), the average below them, and **More** adding 5
+older periods at a time (**Show 5** returns). The ring and all bars were made
+thicker (ring stroke 9% of its size, bars 11px) and the ring's two arc gaps at
+10 and 2 o'clock widened to ~9° clear of the round caps.
