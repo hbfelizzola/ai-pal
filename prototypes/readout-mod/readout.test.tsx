@@ -4,40 +4,24 @@ const pane = {
   title: 'ai-pal', isFocused: false, bodyColumns: 44, placement: 'dock',
   scroll: { offset: 0, bodyRows: 60 }, view: {},
 } as const
-const band = {
-  hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 10, bodyColumns: 110,
-  scroll: { offset: 0, bodyRows: 10 }, view: {},
-} as const
 
-test('every band layout x data x stale x under-1h draws on desktop and terminal', async ($, on) => {
+test('every gauge layout x data x time bars draws on desktop and terminal', async ($, on) => {
   on('clock.now', () => ({ value: Date.parse('2026-11-11T12:00:00Z') }))
-  // Stands for the engine's own band, drawn when the mod passes.
-  on('ui.render', ($, e) => {
-    const { Text } = $.ui.resolve(e)
-    return <Text>engine</Text>
-  })
-  const ui = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'Pane', requestId: 'ai-pal', props: pane, surface: 'desktop' })
-  const desk = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'AbovePrompt', props: band, surface: 'desktop' })
-  const term = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'AbovePrompt', props: band, surface: 'terminal' })
-  for (let s = 0; s < 4; s++) {
-    for (const flip of ['stale', 'noburn', 'wording', 'burnpos', 'wording', 'stale', 'wording', 'noburn', 'burnpos']) {
-      for (let v = 0; v < 5; v++) {
-        expect(await desk.drawn()).toMatchObject({ type: 'Box' })
-        expect(await term.drawn()).toMatchObject({ type: 'Box' })
-        await ui.press({ key: 'next' })
+  for (const surface of ['desktop', 'terminal'] as const) {
+    const ui = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'Pane', requestId: 'ai-pal', props: pane, surface })
+    const seen = new Set<string>()
+    for (let s = 0; s < 5; s++) {
+      for (const flip of ['next', 'bars', 'next', 'bars']) {
+        const drawn = JSON.stringify(await ui.drawn())
+        for (const word of ['Use more', 'On track', 'Ease off', 'Burn Rate after 1 h']) if (drawn.includes(word)) seen.add(word)
+        await ui.press({ key: flip })
       }
-      await ui.press({ key: flip })
+      await ui.press({ key: 'scn' })
     }
-    await ui.press({ key: 'scn' })
+    // The five scenarios reach all three calls and the no-Burn-Rate state.
+    expect([...seen].sort()).toEqual(['Burn Rate after 1 h', 'Ease off', 'On track', 'Use more'])
+    await ui.unmount()
   }
-  // Typical week overruns the 5-hour Reset: the amber hatch is drawn.
-  expect(JSON.stringify(await desk.drawn())).toContain('url(#hatch)')
-  // Quiet week (< 1 h Active Use) shows the muted Burn Rate note.
-  await ui.press({ key: 'scn' })
-  expect(JSON.stringify(await desk.drawn())).toContain('Burn Rate after 1 h')
-  // Band off passes to what's beneath.
-  await ui.press({ key: 'bandon' })
-  expect(JSON.stringify(await desk.drawn())).toContain('engine')
 })
 
 test('the history pane still pages its rows', async ($, on) => {

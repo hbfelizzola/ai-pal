@@ -1,35 +1,22 @@
-// PROTOTYPE, throw away. Answers "Should the band above the prompt show the
-// 5-hour time bar?" (hbfelizzola/ai-pal#17): five band layouts above the
-// prompt, switched from the pane (◀ ▶), with the history pane that won "How
-// do the history and Burn Rate sections look under the ring?" (#14) below the
-// band controls. Mock data only; nothing here reads real usage.
+// PROTOTYPE, throw away. "Should the band above the prompt show the 5-hour
+// time bar?" (hbfelizzola/ai-pal#17) ended with the band left to v2 and a
+// Burn Rate speedometer under the ring instead: needle at the Burn Rate,
+// three zones, and in its centre one of three calls (Use more / On track /
+// Ease off). ◀ ▶ switch one 5-hour gauge or two gauges, "Data" cycles mock
+// scenarios, "Time bars" keeps or drops #14's time bars. Mock data only.
+// The band layouts tried first are in this branch's history (7a184d3).
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { Reading } from '../types'
-
 const PANE = 'ai-pal'
-const band = atom({ plugin: 'ai-pal-readout-prototype', key: 'band' } as const, 0)
-const isBandOn = atom({ plugin: 'ai-pal-readout-prototype', key: 'isBandOn' } as const, true)
-const isStale = atom({ plugin: 'ai-pal-readout-prototype', key: 'isStale' } as const, false)
-const wording = atom({ plugin: 'ai-pal-readout-prototype', key: 'wording' } as const, 0)
-const isBurnBelow = atom({ plugin: 'ai-pal-readout-prototype', key: 'isBurnBelow' } as const, true)
-const isCountdown = atom({ plugin: 'ai-pal-readout-prototype', key: 'isCountdown' } as const, false)
+const layout = atom({ plugin: 'ai-pal-readout-prototype', key: 'layout' } as const, 0)
+const isTimeBars = atom({ plugin: 'ai-pal-readout-prototype', key: 'isTimeBars' } as const, true)
 const scenario = atom({ plugin: 'ai-pal-readout-prototype', key: 'scenario' } as const, 0)
 const shownFive = atom({ plugin: 'ai-pal-readout-prototype', key: 'shownFive' } as const, 5)
 const shownWeek = atom({ plugin: 'ai-pal-readout-prototype', key: 'shownWeek' } as const, 5)
 const tick = atom({ plugin: 'ai-pal-readout-prototype', key: 'tick' } as const, 0)
 
-const BANDS = ['Beside', 'Whole band', 'Two rows', 'Two time bars', 'Time bar only']
-const BAND_NOTES = [
-  '5-hour time bar left, weekly Unused Allowance bar right',
-  '5-hour time bar across the band, weekly as a text chip',
-  "#6's two bars, the 5-hour time bar under them",
-  '5-hour and weekly time bars side by side',
-  'the 5-hour time bar alone; weekly lives in the pane',
-]
 const H = 3_600_000
-const STALE_MIN = 42
 
 // Window identities from #6: warm 5-hour, cool weekly. Fixed hex for both themes.
 const WARM: [string, string] = ['#F6A15B', '#E0703F']
@@ -43,7 +30,6 @@ const FONT = 'font-family="-apple-system,system-ui,sans-serif"'
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const grad = (id: string, c: [string, string], vertical = false) =>
   `<linearGradient id="${id}" x1="0" y1="${vertical ? 1 : 0}" x2="${vertical ? 0 : 1}" y2="0"><stop offset="0" stop-color="${c[0]}"/><stop offset="1" stop-color="${c[1]}"/></linearGradient>`
-const HATCH = '<pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" fill="rgba(255,255,255,0.35)"/></pattern>'
 
 // ---------- mock history ----------
 
@@ -99,6 +85,14 @@ const SCENARIOS: Scenario[] = [
     burn: { five: 22, week: 3 },
   },
   {
+    name: 'Steady',
+    now: { five: [55, 2.5], week: [40, 96] },
+    five: spread([10, 4, 0, 18, 6, 2, 0, 9], 150),
+    week: [{ lost: 12, agoH: 96 + 504 }, { lost: 7, agoH: 96 + 336 }, { lost: 15, agoH: 96 + 168 }, { lost: 5, agoH: 96 }],
+    activeH: 26,
+    burn: { five: 25, week: 1.4 },
+  },
+  {
     name: 'Heavy user',
     now: { five: [80, 3], week: [70, 20] },
     five: spread([0, 2, 0, 5, 0, 0, 1, 9, 0, 3, 0, 0, 4, 0, 2, 0, 0, 1, 6, 0], 165),
@@ -120,6 +114,7 @@ type Stats = {
   left: number
   resetMs: number
   burn?: number // undefined until ≥ 1 h of Active Use
+  horizonH: number // Active Use you can expect before the Reset
   needH?: number
   isOver: boolean
 }
@@ -136,6 +131,9 @@ function stats(s: Scenario, kind: Kind): Stats {
   return {
     kind, name: kind === 'five_hour' ? '5-hour' : 'Weekly', colors: kind === 'five_hour' ? WARM : COOL,
     past, avg, exact: exacts.length, left, resetMs, burn, needH,
+    // 5-hour: nonstop to the Reset is realistic. Weekly: your usual share of
+    // Active Use (rolling 7 days) of the time to Reset.
+    horizonH: kind === 'five_hour' ? inH : (inH * s.activeH) / 168,
     isOver: needH !== undefined && needH * H > resetMs,
   }
 }
@@ -274,180 +272,108 @@ function ringWins(s: Scenario, now: number): [Win, Win] {
   ]
 }
 
-// ---------- the band ----------
+// ---------- the Burn Rate speedometer ----------
 
-// One lane: a label row (name and figures) over an 8px bar, and with the
-// Burn Rate below it, a caption line under the bar. Lanes sit side by side or
-// stacked; the band is one SVG so its width is ours to lay out.
-const BAR = 8
-const GAP = 24
-const AGE_W = 84
-type BandOpts = { isStale: boolean; isCountdown: boolean; wording: number; isBurnBelow: boolean }
-type Span = [text: string, fill: string, isBold?: boolean]
-const tw = (spans: Span[], fs = 12) => spans.reduce((a, s) => a + s[0].length, 0) * fs * 0.56
-const tspans = (spans: Span[]) =>
-  spans.map(([t, fill, b]) => `<tspan fill="${fill}"${b ? ' font-weight="650"' : ''}>${esc(t)}</tspan>`).join('')
-const plain = (spans: Span[]) => spans.map(s => s[0]).join('')
-// The first right-hand label that fits beside the left one, else none.
-const fit = (w: number, left: Span[], rights: Span[][], fs = 12) => rights.find(r => tw(left, fs) + tw(r, fs) + 12 <= w) ?? []
-const laneH = (o: BandOpts) => (o.isBurnBelow ? 42 : 30)
-
-function labelRow(x: number, y: number, w: number, left: Span[], rights: Span[][]) {
-  const right = fit(w, left, rights)
-  return `<text x="${x}" y="${y + 9}" dominant-baseline="central" ${FONT} font-size="12">${tspans(left)}</text>` +
-    (right.length ? `<text x="${x + w}" y="${y + 9}" text-anchor="end" dominant-baseline="central" ${FONT} font-size="12">${tspans(right)}</text>` : '')
-}
-
-const gid = (st: Stats) => (st.kind === 'five_hour' ? 'b5' : 'b7')
-const pctText = (st: Stats, o: BandOpts) => `${o.isStale ? '~' : ''}${st.left}%`
-
-// ----- wordings: what the time bar tells you to do -----
-// Each gives the verdict (long and short forms) and how it phrases the Burn
-// Rate; the band uses the longest that fits.
-const WORDINGS = ['Use more / On track', 'Rate needed', 'Hours of use left']
-type Said = { main: Span[]; mainShort: Span[]; tiny: Span[]; burn: string; burnShort: string }
-function said(st: Stats, wording: number): Said {
-  const burn = st.burn ?? 0
-  const r = rateText(burn)
-  const leftH = st.resetMs / H
-  const n = hText(st.needH ?? 0)
+// What to do, from how much of the Active Use you can expect before the Reset
+// you'd need to spend what's left at your Burn Rate (duty = Active Use needed
+// ÷ horizon). 5-hour horizon: the time to Reset, nonstop. Weekly horizon: your
+// usual share of Active Use over the time to Reset. Over 1: some goes unused.
+// Under ½: it goes with time to spare. On the dial those become rates:
+// r1 = left ÷ horizon (duty 1), r2 = 2 × r1 (duty ½).
+type Verdict = { key: 'more' | 'track' | 'ease'; word: string; hint: string; color: string; detail: string }
+const EASE = '#A7A7A7'
+function verdict(st: Stats): Verdict | undefined {
+  if (st.burn === undefined || st.needH === undefined) return undefined
+  const duty = st.needH / Math.max(st.horizonH, 0.01)
   const until = untilText(st.resetMs)
-  const hot = st.isOver ? OVER : st.colors[1]
-  if (wording === 1) {
-    // Rate needed: the %/h of Active Use it takes to spend the rest by Reset,
-    // against the rate you actually burn.
-    const pace = rateText(st.left / Math.max(leftH, 0.01))
-    return {
-      main: [[`spending it needs ${pace}%/h`, hot, true]],
-      mainShort: [[`needs ${pace}%/h`, hot, true]],
-      tiny: [[`${pace}%/h`, hot, true]],
-      burn: `you're at ${r}%/h of Active Use`, burnShort: `you're at ${r}%/h`,
-    }
+  const how = st.kind === 'five_hour' ? 'even nonstop' : 'at your usual Active Use'
+  if (duty > 1) {
+    const unused = Math.max(1, Math.round(st.left - st.burn * st.horizonH))
+    return { key: 'more', word: 'Use more', hint: 'or a bigger model', color: OVER, detail: `~${unused}% would go unused ${how} · resets in ${until}` }
   }
-  if (wording === 2) {
-    // Hours of use left: how long the rest lasts at your rate vs time to Reset.
-    return st.isOver
-      ? { main: [[`~${n} h of use left`, OVER, true], [` · won't fit in ${until}`, MUTED]], mainShort: [[`~${n} h of use left`, OVER, true]], tiny: [[`~${n} h`, OVER, true]], burn: `at ${r}%/h of Active Use`, burnShort: `at ${r}%/h` }
-      : { main: [[`~${n} h of use left`, hot, true], [` · fits in ${until}`, MUTED]], mainShort: [[`~${n} h of use left`, hot, true]], tiny: [[`~${n} h`, hot, true]], burn: `at ${r}%/h of Active Use`, burnShort: `at ${r}%/h` }
+  if (duty >= 0.5)
+    return { key: 'track', word: 'On track', hint: 'keep this pace', color: st.colors[1], detail: `spends it in ~${hText(st.needH)} h of use · ${until} left` }
+  return { key: 'ease', word: 'Ease off', hint: 'or a lighter model', color: EASE, detail: `runs out after ~${hText(st.needH)} h of use · ${until} left` }
+}
+const zones = (st: Stats) => {
+  const r1 = st.left / Math.max(st.horizonH, 0.01)
+  return { r1, r2: 2 * r1 }
+}
+const niceMax = (v: number) => {
+  const step = v <= 10 ? 2 : v <= 50 ? 10 : 20
+  return Math.max(step, Math.ceil(v / step) * step)
+}
+
+const SWEEP = 240
+function gaugeSvg(size: number, st: Stats): [svg: string, height: number] {
+  const k = size / 200
+  const sw = 13 * k
+  const pad = 20 * k
+  const r = size / 2 - sw / 2 - pad
+  const cx = size / 2
+  const cy = r + sw / 2 + pad
+  const height = Math.ceil(cy + r * 0.5 + sw / 2 + 16 * k)
+  const v = verdict(st)
+  const { r1, r2 } = zones(st)
+  const max = niceMax(Math.max(r2 * 1.5, (st.burn ?? 0) * 1.15))
+  const ang = (val: number) => -SWEEP / 2 + (SWEEP * Math.min(max, Math.max(0, val))) / max
+  const pt = (deg: number, rad = r) => {
+    const a = ((deg - 90) * Math.PI) / 180
+    return [cx + rad * Math.cos(a), cy + rad * Math.sin(a)] as const
   }
-  // Use more / On track: the verdict first, then what it means.
-  const unused = Math.max(1, Math.round(st.left - burn * leftH))
-  return st.isOver
-    ? { main: [['Use more', OVER, true], [` · ~${unused}% goes unused even nonstop`, MUTED]], mainShort: [['Use more', OVER, true], [` · ~${unused}% goes unused`, MUTED]], tiny: [['Use more', OVER, true]], burn: `at ${r}%/h of Active Use`, burnShort: `at ${r}%/h` }
-    : { main: [['On track', hot, true], [` · spent after ~${n} h of use`, MUTED]], mainShort: [['On track', hot, true], [` · ~${n} h of use`, MUTED]], tiny: [['On track', hot, true]], burn: `at ${r}%/h of Active Use`, burnShort: `at ${r}%/h` }
-}
-// Right-hand label candidates, longest first.
-function rights(s: Said, o: BandOpts): Span[][] {
-  if (o.isBurnBelow) return [s.main, s.mainShort, s.tiny]
-  const b = (t: string): Span => [` · ${t}`, MUTED]
-  return [[...s.main, b(s.burn)], [...s.main, b(s.burnShort)], [...s.mainShort, b(s.burnShort)], s.mainShort, s.tiny]
-}
-
-// #6's band bar: Unused Allowance left of the cap.
-function pctLane(x: number, y: number, w: number, st: Stats, win: Win, o: BandOpts): string {
-  const fill = (w * Math.min(100, st.left)) / 100
-  return `<g><title>${esc(win.tip)}</title>` +
-    labelRow(x, y, w, [[st.name, MUTED]], [[[pctText(st, o), st.colors[1], true], [` · ${win.when}`, MUTED]]]) +
-    `<rect x="${x}" y="${y + 19}" width="${w}" height="${BAR}" rx="4" fill="${TRACK}"/>` +
-    (fill > 0 ? `<rect x="${x}" y="${y + 19}" width="${Math.max(8, fill)}" height="${BAR}" rx="4" fill="url(#${gid(st)})"/>` : '') +
-    `</g>`
-}
-
-const caption = (x: number, y: number, w: number, texts: string[]) => {
-  const t = texts.find(c => c.length * 10.5 * 0.56 <= w) ?? ''
-  return t ? `<text x="${x}" y="${y + 36}" dominant-baseline="central" ${FONT} font-size="10.5" fill="${MUTED}">${esc(t)}</text>` : ''
-}
-
-// Before a Burn Rate (< 1 h of Active Use): the % bar, or a countdown of the
-// time to Reset against the window's full length.
-function noBurnLane(x: number, y: number, w: number, st: Stats, win: Win, o: BandOpts, isNameless = false): string {
-  const left: Span[] = isNameless ? [] : [[`${st.name} `, MUTED], [pctText(st, o), st.colors[1], true], [` · ${win.when}`, MUTED]]
-  const notes: Span[][] = o.isBurnBelow ? [] : [[['Burn Rate after 1 h of Active Use', MUTED]], [['Burn Rate after 1 h', MUTED]]]
-  const by = y + 19
-  let bar: string
-  if (o.isCountdown) {
-    const lenH = st.kind === 'five_hour' ? 5 : 168
-    const tx = Math.max(8, (w * Math.min(lenH, st.resetMs / H)) / lenH)
-    bar = `<rect x="${x + 0.5}" y="${by + 0.5}" width="${w - 1}" height="${BAR - 1}" rx="3.5" fill="none" stroke="${TRACK}" stroke-dasharray="2 2"/>` +
-      `<rect x="${x}" y="${by}" width="${tx}" height="${BAR}" rx="4" fill="${TRACK}"/>` +
-      `<line x1="${x + tx}" y1="${by - 3}" x2="${x + tx}" y2="${by + BAR + 3}" stroke="${MUTED}" stroke-width="1.2"/>`
+  const P = (deg: number, rad = r) => pt(deg, rad).map(n => n.toFixed(2)).join(' ')
+  const arc = (a: number, b: number) => `M ${P(a)} A ${r} ${r} 0 ${b - a > 180 ? 1 : 0} 1 ${P(b)}`
+  const zone = (from: number, to: number, stroke: string, tip: string, opacity = 1) =>
+    to > from ? `<g><title>${esc(tip)}</title><path d="${arc(ang(from), ang(to))}" fill="none" stroke="${stroke}" stroke-opacity="${opacity}" stroke-width="${sw}"/></g>` : ''
+  const label = (val: number, text: string) => {
+    const [x, y] = pt(ang(val), r + sw / 2 + 7 * k)
+    const a = ang(val)
+    const anchor = a < -10 ? 'end' : a > 10 ? 'start' : 'middle'
+    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="central" ${FONT} font-size="${9.5 * k}" fill="${MUTED}">${esc(text)}</text>`
+  }
+  const k1 = rateText(r1), k2 = rateText(r2)
+  let dial: string
+  if (!v) {
+    dial = `<path d="${arc(-SWEEP / 2, SWEEP / 2)}" fill="none" stroke="${TRACK}" stroke-width="${sw}"/>`
   } else {
-    const fill = (w * Math.min(100, st.left)) / 100
-    bar = `<rect x="${x}" y="${by}" width="${w}" height="${BAR}" rx="4" fill="${TRACK}"/>` +
-      (fill > 0 ? `<rect x="${x}" y="${by}" width="${Math.max(8, fill)}" height="${BAR}" rx="4" fill="url(#${gid(st)})"/>` : '')
+    dial =
+      zone(0, r1, OVER, `Below ${k1}%/h: some of the ${st.left}% left goes unused`, 0.75) +
+      zone(r1, r2, st.colors[1], `${k1}–${k2}%/h: spends it in over half the Active Use you can expect before the Reset`, 0.85) +
+      zone(r2, max, TRACK, `Above ${k2}%/h: runs out with time to spare`) +
+      label(r1, k1) + label(r2, k2)
   }
-  const below = o.isBurnBelow ? caption(x, y, w, ['Burn Rate after 1 h of Active Use', 'Burn Rate after 1 h']) : ''
-  return `<g><title>${esc(`${win.tip} · Burn Rate after 1 h of Active Use`)}</title>${labelRow(x, y, w, left, notes)}${bar}${below}</g>`
+  const end = (val: number, text: string) => {
+    const [x, y] = pt(ang(val), r)
+    return `<text x="${x.toFixed(1)}" y="${(y + sw / 2 + 8 * k).toFixed(1)}" text-anchor="middle" dominant-baseline="central" ${FONT} font-size="${9.5 * k}" fill="${MUTED}">${esc(text)}</text>`
+  }
+  const ends = v ? end(0, "0") + end(max, `${max}%/h`) : ""
+  let pointer = ''
+  if (v) {
+    const a = ang(st.burn ?? 0)
+    const [x1, y1] = pt(a, r - sw / 2 - 7 * k)
+    const [x2, y2] = pt(a, r + sw / 2 + 1)
+    pointer = `<g><title>${esc(`Burn Rate ${rateText(st.burn ?? 0)}%/h of Active Use`)}</title>` +
+      `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="rgba(0,0,0,0.35)" stroke-width="${6 * k}" stroke-linecap="round"/>` +
+      `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${v.color}" stroke-width="${3.5 * k}" stroke-linecap="round"/>` +
+      `<circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="${3.5 * k}" fill="${v.color}"/></g>`
+  }
+  const centre = v
+    ? `<text x="${cx}" y="${cy - 12 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-weight="650" font-size="${26 * k}" fill="${st.colors[1]}">${rateText(st.burn ?? 0)}<tspan font-size="${13 * k}" font-weight="500" fill="${MUTED}">%/h</tspan></text>` +
+      `<text x="${cx}" y="${cy + 14 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-weight="650" font-size="${14 * k}" fill="${v.color}">${esc(v.word)}</text>` +
+      `<text x="${cx}" y="${cy + 30 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-size="${10.5 * k}" fill="${MUTED}">${esc(v.hint)}</text>`
+    : `<text x="${cx}" y="${cy - 8 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-weight="650" font-size="${24 * k}" fill="${MUTED}">—</text>` +
+      `<text x="${cx}" y="${cy + 14 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-size="${10.5 * k}" fill="${MUTED}">Burn Rate after</text>` +
+      `<text x="${cx}" y="${cy + 28 * k}" text-anchor="middle" dominant-baseline="central" ${FONT} font-size="${10.5 * k}" fill="${MUTED}">1 h of Active Use</text>`
+  return [`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${height}" viewBox="0 0 ${size} ${height}">${dial}${ends}${pointer}${centre}</svg>`, height]
 }
 
-// The time bar at band height: grey track = time to Reset, window gradient =
-// Active Use the rest lasts, amber hatching past the Reset tick when it won't
-// fit. The right label says what to do; the Burn Rate explains the colour.
-function timeLane(x: number, y: number, w: number, st: Stats, win: Win, o: BandOpts, isNameless = false): string {
-  if (st.burn === undefined) return noBurnLane(x, y, w, st, win, o, isNameless)
-  const need = st.needH ?? 0
-  const leftH = st.resetMs / H
-  const s = said(st, o.wording)
-  const left: Span[] = isNameless ? [] : [[`${st.name} `, MUTED], [pctText(st, o), st.colors[1], true], [` · ${win.when}`, MUTED]]
-  const scale = (w - 2) / (Math.max(leftH, need) * 1.04)
-  const tx = leftH * scale
-  const by = y + 19
-  const fill = Math.min(need, leftH) * scale
-  const over = st.isOver
-    ? `<rect x="${x + tx}" y="${by}" width="${(need - leftH) * scale}" height="${BAR}" fill="${OVER}" opacity="0.85"/><rect x="${x + tx}" y="${by}" width="${(need - leftH) * scale}" height="${BAR}" fill="url(#hatch)"/>`
-    : ''
-  const below = o.isBurnBelow ? caption(x, y, w, [s.burn, s.burnShort]) : ''
-  return `<g><title>${esc(`${st.name} · ${st.left}% left · ${plain(s.main)} · ${s.burn} · resets in ${untilText(st.resetMs)}`)}</title>` +
-    labelRow(x, y, w, left, rights(s, o)) +
-    `<rect x="${x}" y="${by}" width="${tx}" height="${BAR}" rx="4" fill="${TRACK}"/>` +
-    `<rect x="${x}" y="${by}" width="${Math.max(8, fill)}" height="${BAR}" rx="4" fill="url(#${gid(st)})"/>${over}` +
-    `<line x1="${x + tx}" y1="${by - 3}" x2="${x + tx}" y2="${by + BAR + 3}" stroke="${MUTED}" stroke-width="1.2"/>${below}</g>`
-}
+// ---------- the pane ----------
 
-const chipSpans = (st: Stats, win: Win, o: BandOpts): Span[] => [[`${st.name} `, MUTED], [pctText(st, o), st.colors[1], true], [` · ${win.when}`, MUTED]]
-function weekChip(xRight: number, y: number, st: Stats, win: Win, o: BandOpts): string {
-  return `<g><title>${esc(win.tip)}</title><text x="${xRight}" y="${y + 9}" text-anchor="end" dominant-baseline="central" ${FONT} font-size="12">${tspans(chipSpans(st, win, o))}</text></g>`
-}
-
-function bandHeight(v: number, o: BandOpts) {
-  return v === 2 ? 30 + 6 + laneH(o) : laneH(o)
-}
-
-function bandSvg(v: number, W: number, five: Stats, week: Stats, w5: Win, w7: Win, o: BandOpts): string {
-  const w = W - (o.isStale ? AGE_W : 0)
-  const half = (w - GAP) / 2
-  const bh = bandHeight(v, o)
-  let body: string
-  if (v === 0) body = timeLane(0, 0, half, five, w5, o) + pctLane(half + GAP, 0, half, week, w7, o)
-  else if (v === 1) {
-    const chipW = tw(chipSpans(week, w7, o)) + GAP
-    body = timeLane(0, 0, w - chipW, five, w5, o) + weekChip(w, 0, week, w7, o)
-  } else if (v === 2) body = pctLane(0, 0, half, five, w5, o) + pctLane(half + GAP, 0, half, week, w7, o) + timeLane(0, 36, w, five, w5, o, true)
-  else if (v === 3) body = timeLane(0, 0, half, five, w5, o) + timeLane(half + GAP, 0, half, week, w7, o)
-  else body = timeLane(0, 0, w, five, w5, o)
-  const age = o.isStale
-    ? `<text x="${W}" y="${bh / 2 + 1}" text-anchor="end" dominant-baseline="central" ${FONT} font-size="11" fill="${OVER}"><title>Last Reading ${STALE_MIN} min ago</title>${STALE_MIN} min old</text>`
-    : ''
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${bh}" viewBox="0 0 ${W} ${bh}"><defs>${grad('b5', WARM)}${grad('b7', COOL)}${HATCH}</defs>` +
-    `<g opacity="${o.isStale ? 0.45 : 1}">${body}</g>${age}</svg>`
-}
-
-// Terminal: no Svg, so one line of text per window.
-function bandText(v: number, five: Stats, week: Stats, w5: Win, w7: Win, o: BandOpts): string {
-  const t = o.isStale ? '~' : ''
-  const s = said(five, o.wording)
-  const fiveT = five.burn === undefined
-    ? `5-hour ${t}${five.left}% · ${w5.when} · Burn Rate after 1 h of Active Use`
-    : `5-hour ${t}${five.left}% · ${w5.when} · ${plain(s.main)} · ${s.burn}`
-  const weekT = `Weekly ${t}${week.left}% · ${w7.when}`
-  return [fiveT, v === 4 ? '' : weekT, o.isStale ? `${STALE_MIN} min old` : ''].filter(Boolean).join('   ')
-}
-
-// ---------- the mod ----------
+const LAYOUTS = ['5-hour gauge', 'Two gauges']
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'ai-pal-proto', description: 'PROTOTYPE: open the ai-pal band layouts pane' })
+    await $.command.register({ name: 'ai-pal-proto', description: 'PROTOTYPE: open the ai-pal pane with the Burn Rate speedometer' })
     $.clock.every(60_000, () => update($, tick, n => n + 1))
     void $.ui.open({ id: PANE, title: 'ai-pal' })
     return next(e)
@@ -458,39 +384,13 @@ export const register: Register = on => {
     return { text: opened.isPlaced ? 'ai-pal pane opened.' : `Not placed: ${opened.reason}` }
   })
 
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || !(await read($, isBandOn))) return next(e)
-    const { Box, Text, Svg } = $.ui.resolve(e) as any
-    await read($, tick)
-    const now = await $.clock.now()
-    const s = SCENARIOS[(await read($, scenario)) % SCENARIOS.length]!
-    const v = await read($, band)
-    const o: BandOpts = { isStale: await read($, isStale), isCountdown: await read($, isCountdown), wording: await read($, wording), isBurnBelow: await read($, isBurnBelow) }
-    const five = stats(s, 'five_hour')
-    const week = stats(s, 'seven_day')
-    const [w5, w7] = ringWins(s, now)
-    if (!Svg) return <Box><Text dimColor={o.isStale}>{bandText(v, five, week, w5, w7, o)}</Text></Box>
-    // The band reports width in code-font cells only; ~7.2px a cell is a guess.
-    const W = Math.max(320, Math.floor(e.props.bodyColumns * CELL_PX) - 4)
-    return (
-      <Box flexDirection="row">
-        <Svg isInteractive source={bandSvg(v, W, five, week, w5, w7, o)} alt={bandText(v, five, week, w5, w7, o)} width={W} height={bandHeight(v, o)} />
-      </Box>
-    )
-  })
-
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Svg } = $.ui.resolve(e) as any
     await read($, tick)
     const now = await $.clock.now()
-    const v = await read($, band)
-    const bandOn = await read($, isBandOn)
-    const stale = await read($, isStale)
-    const countdown = await read($, isCountdown)
-    const wv = await read($, wording)
-    const burnBelow = await read($, isBurnBelow)
-    const sIdx = await read($, scenario)
-    const s = SCENARIOS[sIdx % SCENARIOS.length]!
+    const v = await read($, layout)
+    const bars = await read($, isTimeBars)
+    const s = SCENARIOS[(await read($, scenario)) % SCENARIOS.length]!
     const five = stats(s, 'five_hour')
     const week = stats(s, 'seven_day')
     const both = [five, week]
@@ -501,7 +401,28 @@ export const register: Register = on => {
     const noBurn = <Text color={MUTED} size="footnote">Burn Rate after 1 h of Active Use</Text>
     const shown = { five_hour: await read($, shownFive), seven_day: await read($, shownWeek) }
 
-    // The history pane that won #14 (D · Time bars, reworked), unchanged.
+    const gauge = (st: Stats, size: number, isNamed: boolean) => {
+      const [source, gh] = gaugeSvg(size, st)
+      const vd = verdict(st)
+      const alt = vd ? `${st.name} Burn Rate ${rateText(st.burn ?? 0)}%/h: ${vd.word}, ${vd.hint}` : `${st.name}: Burn Rate after 1 h of Active Use`
+      return (
+        <Box flexDirection="column" alignItems="center" gap={0}>
+          {isNamed && <Text weight="semibold" size="footnote" color={st.colors[1]}>{st.name}</Text>}
+          {e.surface === 'terminal'
+            ? (vd
+              ? <Text><Text bold>{rateText(st.burn ?? 0)}%/h</Text> · <Text color={vd.color} bold>{vd.word}</Text> <Text dimColor>{vd.hint}</Text></Text>
+              : <Text dimColor>Burn Rate after 1 h of Active Use</Text>)
+            : svg(source, alt, size, gh)}
+          {vd && <Text size="caption" color={MUTED} tabular>{vd.detail}</Text>}
+        </Box>
+      )
+    }
+    const gauges = v === 0
+      ? <Box flexDirection="column" alignItems="center">{gauge(five, Math.min(W, 220), false)}</Box>
+      : <Box flexDirection="row" justifyContent="space-between">{both.map(st => gauge(st, Math.floor((W - 12) / 2), true))}</Box>
+
+    // The history pane that won #14 (D · Time bars, reworked); the time bars
+    // can be dropped now the speedometer carries the projection.
     const history = (
       <Box flexDirection="column" gap={2}>
         {both.map(st => {
@@ -512,13 +433,11 @@ export const register: Register = on => {
             <Box flexDirection="column" gap={0}>
               <Box flexDirection="row" justifyContent="space-between">
                 <Text weight="semibold" size="footnote" color={st.colors[1]}>{st.name}</Text>
-                {st.burn === undefined ? <Text /> : (
-                  <Text size="footnote" tabular>{said(st, wv).main.map(([t, c, b]) => <Text color={c} weight={b ? 'semibold' : undefined}>{t}</Text>)}</Text>
-                )}
+                {bars && st.burn !== undefined ? <Text size="footnote" tabular color={st.isOver ? OVER : MUTED}>{projText(st)}</Text> : <Text />}
               </Box>
-              {st.burn === undefined ? noBurn : svg(timeBarSvg(W, st), `${st.name}: ${plain(said(st, wv).main)}`, W, 28)}
-              {st.burn !== undefined && <Text size="caption" color={MUTED} tabular>{said(st, wv).burn}</Text>}
-              <Box marginTop={1}><Text size="caption" color={MUTED} weight="semibold">LOST AT RESET</Text></Box>
+              {bars && (st.burn === undefined ? noBurn : svg(timeBarSvg(W, st), `${st.name}: ${projText(st)}`, W, 28))}
+              {bars && st.burn !== undefined && <Text size="caption" color={MUTED} tabular>at {rateText(st.burn)}%/h of Active Use</Text>}
+              <Box marginTop={bars ? 1 : 0}><Text size="caption" color={MUTED} weight="semibold">LOST AT RESET</Text></Box>
               {rows.length === 0
                 ? <Text size="caption" color={MUTED}>no past windows yet</Text>
                 : svg(periodRowsSvg(W, st, rows, now), `${st.name} Lost Allowance, last ${rows.length} periods`, W, rows.length * ROW_H)}
@@ -548,27 +467,19 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" gap={1}>
-        <Text size="caption" color={MUTED} weight="semibold">BAND ABOVE THE PROMPT</Text>
         <Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
-          <Button key="prev" label="◀" onPress={() => update($, band, n => (n + BANDS.length - 1) % BANDS.length)} />
-          <Text weight="semibold">{String.fromCharCode(65 + v)} · {BANDS[v]}</Text>
-          <Button key="next" label="▶" onPress={() => update($, band, n => (n + 1) % BANDS.length)} />
+          <Button key="prev" label="◀" onPress={() => update($, layout, n => (n + LAYOUTS.length - 1) % LAYOUTS.length)} />
+          <Text weight="semibold">{String.fromCharCode(65 + v)} · {LAYOUTS[v]}</Text>
+          <Button key="next" label="▶" onPress={() => update($, layout, n => (n + 1) % LAYOUTS.length)} />
         </Box>
-        <Text size="footnote" color={MUTED}>{BAND_NOTES[v]}</Text>
         <Box flexDirection="row" gap={1} flexWrap="wrap">
           <Button key="scn" variant="secondary" label={`Data: ${s.name}`} onPress={() => update($, scenario, n => (n + 1) % SCENARIOS.length)} />
-          <Button key="stale" variant="secondary" label={stale ? `Reading: ${STALE_MIN} min old` : 'Reading: fresh'} onPress={() => update($, isStale, b => !b)} />
-          <Button key="noburn" variant="secondary" label={`Under 1 h: ${countdown ? 'countdown' : '% bar'}`} onPress={() => update($, isCountdown, b => !b)} />
-          <Button key="wording" variant="secondary" label={`Wording: ${WORDINGS[wv]}`} onPress={() => update($, wording, n => (n + 1) % WORDINGS.length)} />
-          <Button key="burnpos" variant="secondary" label={`Burn Rate: ${burnBelow ? 'under the bar' : 'in the label'}`} onPress={() => update($, isBurnBelow, b => !b)} />
-          <Button key="bandon" variant="secondary" label={bandOn ? 'Band: on' : 'Band: off'} onPress={() => update($, isBandOn, b => !b)} />
+          <Button key="bars" variant="secondary" label={bars ? 'Time bars: shown' : 'Time bars: dropped'} onPress={() => update($, isTimeBars, b => !b)} />
         </Box>
-        <Text size="caption" color={MUTED}>
-          {s.activeH < 1 ? 'This data has < 1 h of Active Use: no Burn Rate yet.' : five.isOver ? '5-hour overruns its Reset in this data.' : '5-hour fits before its Reset in this data.'}
-        </Text>
         <Box flexDirection="column" alignItems="center" marginTop={1}>
           {svg(splitRingSvg(180, w5, w7), 'Usage Windows', 180, 180)}
         </Box>
+        {gauges}
         {history}
         <Text dimColor size="caption" mono>
           [proto] surface={e.surface} cols={e.props.bodyColumns} drawW={W} activeH={s.activeH}

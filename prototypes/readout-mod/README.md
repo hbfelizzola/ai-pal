@@ -37,30 +37,24 @@ older periods at a time (**Show 5** returns). The ring and all bars were made
 thicker (ring stroke 9% of its size, bars 11px) and the ring's two arc gaps at
 10 and 2 o'clock widened to ~9° clear of the round caps.
 
-## The band above the prompt (hbfelizzola/ai-pal#17)
+## The band above the prompt → a Burn Rate speedometer (hbfelizzola/ai-pal#17)
 
-The band (`AbovePrompt`) is back, now with the 5-hour **time bar** from #14 at
-band height (8px). The pane's top section switches it: ◀ ▶ step through five
-layouts, **Data** cycles the mock scenarios (Typical week overruns the 5-hour
-Reset, Heavy user fits, Quiet week has < 1 h of Active Use, First days just
-overruns), **Reading** toggles a 42-min-old stale Reading, **Under 1 h** picks
-what shows before there's a Burn Rate (the % bar or a countdown to Reset), and
-**Wording** cycles three ways to say what the time bar means, and **Burn
-Rate** puts `at 18%/h of Active Use` under the bar (default) or in the label.
-**Band** turns it off.
+Five band layouts with the 5-hour time bar, three wordings and the Burn Rate
+were tried (commit 7a184d3) and didn't read clearly; the band time bar is left
+to v2. Instead, the pane gets a **Burn Rate speedometer** under the ring:
 
-Wordings (they replace `~3.4 h needed` in the band and the pane):
-1. **Use more / On track**: `Use more · ~26% goes unused even nonstop`, or
-   `On track · spent after ~0.6 h of use`.
-2. **Rate needed**: `spending it needs 31%/h`, with `you're at 18%/h of Active Use`.
-3. **Hours of use left**: `~3.4 h of use left · won't fit in 2h 0m`, or
-   `· fits in 3h 0m`.
+- The needle is the Burn Rate (%/h of Active Use). Three zones on the dial:
+  amber below r1, the window's colour from r1 to r2, grey above r2.
+- r1 = Unused Allowance ÷ the Active Use you can expect before the Reset
+  (5-hour: the time to Reset, nonstop; weekly: your usual share of Active Use,
+  rolling 7 days, of the time to Reset); r2 = 2 × r1.
+- The centre shows the rate and one of three calls: **Use more** · or a bigger
+  model (below r1: some would go unused), **On track** · keep this pace,
+  **Ease off** · or a lighter model (above r2: runs out with time to spare).
+  A caption under it says why (`~26% would go unused even nonstop · resets in
+  2h 0m`).
+- Under 1 h of Active Use: an empty dial with `Burn Rate after 1 h of Active Use`.
 
-- **A · Beside**: 5-hour time bar left, weekly Unused Allowance bar right.
-- **B · Whole band**: 5-hour time bar across the band, weekly as a text chip.
-- **C · Two rows**: #6's two bars, the 5-hour time bar under them.
-- **D · Two time bars**: 5-hour and weekly time bars side by side.
-- **E · Time bar only**: weekly leaves the band.
-
-The history-layout switch from #14 is gone: the pane draws the winner (D · Time
-bars) under the band controls.
+◀ ▶ switch **A · 5-hour gauge** and **B · Two gauges**; **Data** cycles the
+mock scenarios (Steady added for On track); **Time bars** keeps or drops #14's
+time bars under the history.
