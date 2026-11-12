@@ -5,13 +5,13 @@ const pane = {
   scroll: { offset: 0, bodyRows: 60 }, view: {},
 } as const
 
-test('every gauge layout x data x time bars draws on desktop and terminal', async ($, on) => {
+test('every gauge layout x data draws on desktop and terminal', async ($, on) => {
   on('clock.now', () => ({ value: Date.parse('2026-11-11T12:00:00Z') }))
   for (const surface of ['desktop', 'terminal'] as const) {
     const ui = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'Pane', requestId: 'ai-pal', props: pane, surface })
     const seen = new Set<string>()
     for (let s = 0; s < 5; s++) {
-      for (const flip of ['next', 'bars', 'next', 'bars']) {
+      for (const flip of ['next', 'stale', 'next', 'stale']) {
         const drawn = JSON.stringify(await ui.drawn())
         for (const word of ['Use more', 'On track', 'Ease off', 'Burn Rate after 1 h']) if (drawn.includes(word)) seen.add(word)
         await ui.press({ key: flip })
@@ -24,13 +24,32 @@ test('every gauge layout x data x time bars draws on desktop and terminal', asyn
   }
 })
 
-test('the history pane still pages its rows', async ($, on) => {
+test('the band draws four bars for every scenario, fresh and stale, and passes when off', async ($, on) => {
   on('clock.now', () => ({ value: Date.parse('2026-11-11T12:00:00Z') }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  const band = {
+    hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 10, bodyColumns: 110,
+    scroll: { offset: 0, bodyRows: 10 }, view: {},
+  } as const
   const ui = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'Pane', requestId: 'ai-pal', props: pane, surface: 'desktop' })
-  const count = async () => (JSON.stringify(await ui.drawn()).match(/% lost|no data/g) ?? []).length
-  const before = await count()
-  await ui.press({ key: 'more-five_hour' })
-  expect(await count()).toBeGreaterThan(before)
-  await ui.press({ key: 'less-five_hour' })
-  expect(await count()).toBe(before)
+  const desk = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'AbovePrompt', props: band, surface: 'desktop' })
+  const term = await $.ui.mount({ plugin: 'ai-pal-readout-prototype', component: 'AbovePrompt', props: band, surface: 'terminal' })
+  let hatched = false
+  for (let s = 0; s < 5; s++) {
+    for (let k = 0; k < 2; k++) {
+      const d = JSON.stringify(await desk.drawn())
+      expect(d).toContain('Svg')
+      expect((d.match(/<rect x=/g) ?? []).length).toBeGreaterThanOrEqual(6)
+      hatched ||= d.includes('url(#hatch)')
+      expect(JSON.stringify(await term.drawn())).toContain('Weekly')
+      await ui.press({ key: 'stale' })
+    }
+    await ui.press({ key: 'scn' })
+  }
+  expect(hatched).toBe(true)
+  await ui.press({ key: 'bandon' })
+  expect(JSON.stringify(await desk.drawn())).toContain('engine')
 })

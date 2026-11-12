@@ -1,19 +1,20 @@
 // PROTOTYPE, throw away. "Should the band above the prompt show the 5-hour
-// time bar?" (hbfelizzola/ai-pal#17) ended with the band left to v2 and a
-// Burn Rate speedometer under the ring instead: needle at the Burn Rate,
-// three zones, and in its centre one of three calls (Use more / On track /
-// Ease off). ◀ ▶ switch one 5-hour gauge or two gauges, "Data" cycles mock
-// scenarios, "Time bars" keeps or drops #14's time bars. Mock data only.
-// The band layouts tried first are in this branch's history (7a184d3).
+// time bar?" (hbfelizzola/ai-pal#17): the band carries four bars, per window
+// its Unused Allowance and its time bar, across the full width; the pane
+// keeps the ring with a Burn Rate speedometer under it (needle at the Burn
+// Rate, three zones, and one of three calls: Use more / On track / Ease off).
+// The pane's time bars and Lost Allowance history (#14) are left to v2.
+// ◀ ▶ switch one 5-hour gauge or two gauges, "Data" cycles mock scenarios,
+// "Reading" fades the band as stale. Mock data only. Earlier band tries are in
+// this branch's history (7a184d3).
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 const PANE = 'ai-pal'
 const layout = atom({ plugin: 'ai-pal-readout-prototype', key: 'layout' } as const, 0)
-const isTimeBars = atom({ plugin: 'ai-pal-readout-prototype', key: 'isTimeBars' } as const, true)
+const isBandOn = atom({ plugin: 'ai-pal-readout-prototype', key: 'isBandOn' } as const, true)
+const isStale = atom({ plugin: 'ai-pal-readout-prototype', key: 'isStale' } as const, false)
 const scenario = atom({ plugin: 'ai-pal-readout-prototype', key: 'scenario' } as const, 0)
-const shownFive = atom({ plugin: 'ai-pal-readout-prototype', key: 'shownFive' } as const, 5)
-const shownWeek = atom({ plugin: 'ai-pal-readout-prototype', key: 'shownWeek' } as const, 5)
 const tick = atom({ plugin: 'ai-pal-readout-prototype', key: 'tick' } as const, 0)
 
 const H = 3_600_000
@@ -148,81 +149,105 @@ function untilText(ms: number): string {
 }
 const hText = (h: number) => (h < 10 ? h.toFixed(1) : String(Math.round(h)))
 const rateText = (r: number) => (r < 10 ? r.toFixed(1) : String(Math.round(r)))
-const avgText = (st: Stats) =>
-  st.past.length === 0 ? 'no past windows yet'
-  : st.avg === undefined ? `no exact figure · 0 of ${st.past.length}`
-  : `avg ${st.avg}% lost · ${st.exact} of ${st.past.length} windows`
-const projText = (st: Stats) => `~${hText(st.needH ?? 0)} h needed · resets in ${untilText(st.resetMs)}`
-const entryText = (p: Past) =>
-  p.lost === undefined ? '–' : p.isUpper ? `≤${p.lost}` : p.isEarly ? `${p.lost}↺` : String(p.lost)
+// ---------- the band: four bars ----------
 
-function clock(now: number, agoH: number) {
-  const d = new Date(now - agoH * H)
-  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]
-  return `${day} ${String(d.getHours()).padStart(2, '0')}:00`
+// Two rows across the band's full width, a column per window (5-hour left,
+// weekly right). Top row: Unused Allowance (#6's bar). Bottom row: the time
+// bar (#14) — grey track = time to Reset, window gradient = Active Use the
+// rest lasts at the Burn Rate, amber hatching past the Reset tick when it
+// won't fit. Labels sit inline at the left of each bar so the bars take the
+// rest of the width.
+const BAR = 10
+const ROW = 22
+const COL_GAP = 28
+const AGE_W = 78
+const STALE_MIN = 42
+type Span = [text: string, fill: string, isBold?: boolean]
+const tw = (spans: Span[], fs = 12) => spans.reduce((a, s) => a + s[0].length, 0) * fs * 0.56
+const tspans = (spans: Span[]) =>
+  spans.map(([t, fill, b]) => `<tspan fill="${fill}"${b ? ' font-weight="650"' : ''}>${esc(t)}</tspan>`).join('')
+const gid = (st: Stats) => (st.kind === 'five_hour' ? 'b5' : 'b7')
+const HATCH = '<pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" fill="rgba(255,255,255,0.35)"/></pattern>'
+
+function labels(st: Stats, win: Win, isStale: boolean): [top: Span[], bottom: Span[]] {
+  const t = isStale ? '~' : ''
+  return [
+    [[`${st.name} `, MUTED], [`${t}${st.left}%`, st.colors[1], true], [` · ${win.when}`, MUTED]],
+    st.burn === undefined
+      ? [['Burn Rate after 1 h', MUTED]]
+      : [['at ', MUTED], [`${rateText(st.burn)}%/h`, st.isOver ? OVER : st.colors[1], true]],
+  ]
 }
-function pastTip(st: Stats, p: Past, now: number) {
-  const at = `${st.name} · reset ${clock(now, p.agoH)}`
-  if (p.lost === undefined) return `${at} · no data (no Reading in the window)`
-  if (p.isUpper) return `${at} · ≤ ${p.lost}% lost (last Reading > 15 min before the Reset)`
-  return `${at} · ${p.lost}% lost${p.isEarly ? ' · reset early' : ''}`
-}
+// Label width shared by both columns, so the four bars line up and match.
+const labelW = (cols: [Stats, Win][], isStale: boolean) =>
+  Math.ceil(Math.max(...cols.flatMap(([st, win]) => labels(st, win, isStale).map(l => tw(l))))) + 10
 
-// ---------- drawings ----------
+function column(x: number, w: number, lw: number, st: Stats, win: Win, isStale: boolean): string {
+  const [top, bottom] = labels(st, win, isStale)
+  const bx = x + lw
+  const bw = Math.max(40, w - lw)
+  const text = (y: number, spans: Span[]) => `<text x="${x}" y="${y}" dominant-baseline="central" ${FONT} font-size="12">${tspans(spans)}</text>`
+  const y1 = ROW / 2, y2 = ROW + ROW / 2
 
-// Time bar: grey track = time to Reset, window-coloured fill = Active Use
-// needed to spend what's left. Past the Reset tick, the overrun is amber.
-function timeBarSvg(w: number, st: Stats): string {
-  const h = 28
+  // Row 1: Unused Allowance left of the cap.
+  const fill = (bw * Math.min(100, st.left)) / 100
+  const pct = `<g><title>${esc(win.tip)}</title>${text(y1, top)}` +
+    `<rect x="${bx}" y="${y1 - BAR / 2}" width="${bw}" height="${BAR}" rx="${BAR / 2}" fill="${TRACK}"/>` +
+    (fill > 0 ? `<rect x="${bx}" y="${y1 - BAR / 2}" width="${Math.max(BAR, fill)}" height="${BAR}" rx="${BAR / 2}" fill="url(#${gid(st)})"/>` : '') + `</g>`
+
+  // Row 2: the time bar; before a Burn Rate, a countdown of the time to Reset
+  // against the window's full length.
+  const by = y2 - BAR / 2
   const leftH = st.resetMs / H
-  const need = st.needH ?? 0
-  const scale = (w - 2) / (Math.max(leftH, need) * 1.04)
-  const tx = leftH * scale
-  const id = `t${st.kind}`
-  const fill = Math.min(need, leftH) * scale
-  const over = need > leftH
-    ? `<rect x="${tx}" y="11" width="${(need - leftH) * scale}" height="11" fill="${OVER}" opacity="0.85"/><rect x="${tx}" y="11" width="${(need - leftH) * scale}" height="11" fill="url(#hatch)"/>`
-    : ''
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs>${grad(id, st.colors)}<pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" fill="rgba(255,255,255,0.35)"/></pattern></defs>` +
-    `<g><title>${esc(`${st.name} · ${projText(st)}`)}</title>` +
-    `<rect x="0" y="11" width="${tx}" height="11" rx="5.5" fill="${TRACK}"/>` +
-    `<rect x="0" y="11" width="${Math.max(8, fill)}" height="11" rx="5.5" fill="url(#${id})"/>${over}` +
-    `<line x1="${tx}" y1="7" x2="${tx}" y2="26" stroke="${MUTED}" stroke-width="1.2"/>` +
-    `<text x="${Math.min(tx, w - 2)}" y="6" text-anchor="${tx > w - 40 ? 'end' : 'middle'}" ${FONT} font-size="9" fill="${MUTED}">Reset</text></g></svg>`
+  let bar: string
+  let tip: string
+  if (st.burn === undefined || st.needH === undefined) {
+    const lenH = st.kind === 'five_hour' ? 5 : 168
+    const tx = Math.max(BAR, (bw * Math.min(lenH, leftH)) / lenH)
+    bar = `<rect x="${bx + 0.5}" y="${by + 0.5}" width="${bw - 1}" height="${BAR - 1}" rx="${BAR / 2}" fill="none" stroke="${TRACK}" stroke-dasharray="2 2"/>` +
+      `<rect x="${bx}" y="${by}" width="${tx}" height="${BAR}" rx="${BAR / 2}" fill="${TRACK}"/>` +
+      `<line x1="${bx + tx}" y1="${by - 3}" x2="${bx + tx}" y2="${by + BAR + 3}" stroke="${MUTED}" stroke-width="1.2"/>`
+    tip = `${st.name} · resets in ${untilText(st.resetMs)} · Burn Rate after 1 h of Active Use`
+  } else {
+    const need = st.needH
+    const scale = (bw - 2) / (Math.max(leftH, need) * 1.03)
+    const tx = leftH * scale
+    const f = Math.min(need, leftH) * scale
+    bar = `<rect x="${bx}" y="${by}" width="${tx}" height="${BAR}" rx="${BAR / 2}" fill="${TRACK}"/>` +
+      `<rect x="${bx}" y="${by}" width="${Math.max(BAR, f)}" height="${BAR}" rx="${BAR / 2}" fill="url(#${gid(st)})"/>` +
+      (st.isOver
+        ? `<rect x="${bx + tx}" y="${by}" width="${(need - leftH) * scale}" height="${BAR}" fill="${OVER}" opacity="0.85"/><rect x="${bx + tx}" y="${by}" width="${(need - leftH) * scale}" height="${BAR}" fill="url(#hatch)"/>`
+        : '') +
+      `<line x1="${bx + tx}" y1="${by - 3}" x2="${bx + tx}" y2="${by + BAR + 3}" stroke="${MUTED}" stroke-width="1.2"/>`
+    const unused = Math.max(1, Math.round(st.left - st.burn * leftH))
+    tip = `${st.name} · at ${rateText(st.burn)}%/h of Active Use the ${st.left}% left lasts ~${hText(need)} h of use · resets in ${untilText(st.resetMs)}` +
+      (st.isOver ? ` · ~${unused}% would go unused even nonstop` : '')
+  }
+  return pct + `<g><title>${esc(tip)}</title>${text(y2, bottom)}${bar}</g>`
 }
 
-// One row per past period, newest first: when it reset, a bar of the cap with
-// the Lost Allowance filled in the window's colour, and the figure. Upper
-// bound: dashed outline. No data: empty track. Reset early: ↺ after the figure.
-const ROW_H = 22
-function periodRowsSvg(w: number, st: Stats, rows: Past[], now: number): string {
-  const labelW = 70, figW = 78
-  const bw = w - labelW - figW
-  const id = `r${st.kind}`
-  const color = st.colors[1]
-  const when = (p: Past) => {
-    const d = new Date(now - p.agoH * H)
-    const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]
-    return st.kind === 'five_hour'
-      ? `${day} ${String(d.getHours()).padStart(2, '0')}:00`
-      : `${day} ${d.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]}`
-  }
-  const out = rows.map((p, i) => {
-    const y = i * ROW_H
-    const cy = y + ROW_H / 2
-    const len = p.lost === undefined ? 0 : Math.max(4, (bw * p.lost) / 100)
-    const bar = p.lost === undefined ? ''
-      : p.isUpper
-        ? `<rect x="${labelW + 0.5}" y="${cy - 5}" width="${len - 1}" height="10" rx="5" fill="${color}" fill-opacity="0.18" stroke="${color}" stroke-dasharray="2 2"/>`
-        : `<rect x="${labelW}" y="${cy - 5.5}" width="${len}" height="11" rx="5.5" fill="url(#${id})"/>`
-    const fig = p.lost === undefined ? 'no data' : `${p.isUpper ? '≤ ' : ''}${p.lost}% lost${p.isEarly ? ' ↺' : ''}`
-    return `<g><title>${esc(pastTip(st, p, now))}</title><rect x="0" y="${y}" width="${w}" height="${ROW_H}" fill="transparent"/>` +
-      `<text x="0" y="${cy}" dominant-baseline="central" ${FONT} font-size="10.5" fill="${MUTED}">${esc(when(p))}</text>` +
-      `<rect x="${labelW}" y="${cy - 5.5}" width="${bw}" height="11" rx="5.5" fill="${TRACK}"/>${bar}` +
-      `<text x="${w}" y="${cy}" text-anchor="end" dominant-baseline="central" ${FONT} font-size="10.5" fill="${p.lost === undefined ? MUTED : color}" ${p.lost === undefined ? '' : 'font-weight="600"'}>${esc(fig)}</text></g>`
-  })
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${rows.length * ROW_H}" viewBox="0 0 ${w} ${rows.length * ROW_H}"><defs>${grad(id, st.colors)}</defs>${out.join('')}</svg>`
+const BAND_H = ROW * 2
+function bandSvg(W: number, five: Stats, week: Stats, w5: Win, w7: Win, isStale: boolean): string {
+  const w = W - (isStale ? AGE_W : 0)
+  const half = (w - COL_GAP) / 2
+  const lw = labelW([[five, w5], [week, w7]], isStale)
+  const age = isStale
+    ? `<text x="${W}" y="${BAND_H / 2}" text-anchor="end" dominant-baseline="central" ${FONT} font-size="11" fill="${OVER}"><title>Last Reading ${STALE_MIN} min ago</title>${STALE_MIN} min old</text>`
+    : ''
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${BAND_H}" viewBox="0 0 ${W} ${BAND_H}"><defs>${grad('b5', WARM)}${grad('b7', COOL)}${HATCH}</defs>` +
+    `<g opacity="${isStale ? 0.45 : 1}">${column(0, half, lw, five, w5, isStale)}${column(half + COL_GAP, half, lw, week, w7, isStale)}</g>${age}</svg>`
 }
+
+// Terminal: no Svg, so a text line per window.
+function bandText(five: Stats, week: Stats, w5: Win, w7: Win, isStale: boolean): string[] {
+  const t = isStale ? '~' : ''
+  const line = (st: Stats, win: Win) =>
+    `${st.name} ${t}${st.left}% · ${win.when} · ` +
+    (st.burn === undefined ? 'Burn Rate after 1 h of Active Use' : `at ${rateText(st.burn)}%/h lasts ~${hText(st.needH ?? 0)} h of use${st.isOver ? ' (won\'t all go)' : ''}`)
+  return [line(five, w5), line(week, w7), ...(isStale ? [`${STALE_MIN} min old`] : [])]
+}
+
+// ---------- the ring ----------
 
 // The winning ring from #6, unchanged.
 type Win = { pct: number; tip: string; when: string; isDue: boolean }
@@ -384,12 +409,34 @@ export const register: Register = on => {
     return { text: opened.isPlaced ? 'ai-pal pane opened.' : `Not placed: ${opened.reason}` }
   })
 
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey || !(await read($, isBandOn))) return next(e)
+    const { Box, Text, Svg } = $.ui.resolve(e) as any
+    await read($, tick)
+    const now = await $.clock.now()
+    const s = SCENARIOS[(await read($, scenario)) % SCENARIOS.length]!
+    const stale = await read($, isStale)
+    const five = stats(s, 'five_hour')
+    const week = stats(s, 'seven_day')
+    const [w5, w7] = ringWins(s, now)
+    const lines = bandText(five, week, w5, w7, stale)
+    if (!Svg || e.surface === 'terminal') return <Box flexDirection="column">{lines.map(l => <Text dimColor={stale}>{l}</Text>)}</Box>
+    // The band reports width in code-font cells only; ~7.2px a cell is a guess.
+    const W = Math.max(360, Math.floor(e.props.bodyColumns * CELL_PX) - 4)
+    return (
+      <Box flexDirection="row">
+        <Svg isInteractive source={bandSvg(W, five, week, w5, w7, stale)} alt={lines.join(' · ')} width={W} height={BAND_H} />
+      </Box>
+    )
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Svg } = $.ui.resolve(e) as any
     await read($, tick)
     const now = await $.clock.now()
     const v = await read($, layout)
-    const bars = await read($, isTimeBars)
+    const bandOn = await read($, isBandOn)
+    const stale = await read($, isStale)
     const s = SCENARIOS[(await read($, scenario)) % SCENARIOS.length]!
     const five = stats(s, 'five_hour')
     const week = stats(s, 'seven_day')
@@ -398,8 +445,6 @@ export const register: Register = on => {
     const svg = (source: string, alt: string, width: number, height: number, isInteractive = true) =>
       Svg ? <Svg isInteractive={isInteractive} source={source} alt={alt} width={width} height={height} /> : <Text dimColor>[{alt}]</Text>
     const [w5, w7] = ringWins(s, now)
-    const noBurn = <Text color={MUTED} size="footnote">Burn Rate after 1 h of Active Use</Text>
-    const shown = { five_hour: await read($, shownFive), seven_day: await read($, shownWeek) }
 
     const gauge = (st: Stats, size: number, isNamed: boolean) => {
       const [source, gh] = gaugeSvg(size, st)
@@ -421,50 +466,6 @@ export const register: Register = on => {
       ? <Box flexDirection="column" alignItems="center">{gauge(five, Math.min(W, 220), false)}</Box>
       : <Box flexDirection="row" justifyContent="space-between">{both.map(st => gauge(st, Math.floor((W - 12) / 2), true))}</Box>
 
-    // The history pane that won #14 (D · Time bars, reworked); the time bars
-    // can be dropped now the speedometer carries the projection.
-    const history = (
-      <Box flexDirection="column" gap={2}>
-        {both.map(st => {
-          const newest = [...st.past].reverse()
-          const n = Math.min(shown[st.kind], newest.length)
-          const rows = newest.slice(0, n)
-          return (
-            <Box flexDirection="column" gap={0}>
-              <Box flexDirection="row" justifyContent="space-between">
-                <Text weight="semibold" size="footnote" color={st.colors[1]}>{st.name}</Text>
-                {bars && st.burn !== undefined ? <Text size="footnote" tabular color={st.isOver ? OVER : MUTED}>{projText(st)}</Text> : <Text />}
-              </Box>
-              {bars && (st.burn === undefined ? noBurn : svg(timeBarSvg(W, st), `${st.name}: ${projText(st)}`, W, 28))}
-              {bars && st.burn !== undefined && <Text size="caption" color={MUTED} tabular>at {rateText(st.burn)}%/h of Active Use</Text>}
-              <Box marginTop={bars ? 1 : 0}><Text size="caption" color={MUTED} weight="semibold">LOST AT RESET</Text></Box>
-              {rows.length === 0
-                ? <Text size="caption" color={MUTED}>no past windows yet</Text>
-                : svg(periodRowsSvg(W, st, rows, now), `${st.name} Lost Allowance, last ${rows.length} periods`, W, rows.length * ROW_H)}
-              {st.past.length > 0 && (
-                <Box flexDirection="row" justifyContent="space-between" marginTop={0}>
-                  <Text size="footnote" tabular weight="semibold">{st.avg === undefined ? 'avg —' : `avg ${st.avg}% lost`}</Text>
-                  <Text size="caption" color={MUTED} tabular>{`${st.exact} of ${st.past.length} windows · ${st.kind === 'five_hour' ? 'last 7 days' : 'last 4 weeks'}`}</Text>
-                </Box>
-              )}
-              {(n < newest.length || n > 5) && (
-                <Box flexDirection="row" gap={1} marginTop={1}>
-                  {n < newest.length && (
-                    <Button key={`more-${st.kind}`} variant="secondary" label={`More (${newest.length - n} older)`}
-                      onPress={() => (st.kind === 'five_hour' ? update($, shownFive, k => k + 5) : update($, shownWeek, k => k + 5))} />
-                  )}
-                  {n > 5 && (
-                    <Button key={`less-${st.kind}`} variant="secondary" label="Show 5"
-                      onPress={() => (st.kind === 'five_hour' ? update($, shownFive, () => 5) : update($, shownWeek, () => 5))} />
-                  )}
-                </Box>
-              )}
-            </Box>
-          )
-        })}
-      </Box>
-    )
-
     return (
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
@@ -474,13 +475,13 @@ export const register: Register = on => {
         </Box>
         <Box flexDirection="row" gap={1} flexWrap="wrap">
           <Button key="scn" variant="secondary" label={`Data: ${s.name}`} onPress={() => update($, scenario, n => (n + 1) % SCENARIOS.length)} />
-          <Button key="bars" variant="secondary" label={bars ? 'Time bars: shown' : 'Time bars: dropped'} onPress={() => update($, isTimeBars, b => !b)} />
+          <Button key="stale" variant="secondary" label={stale ? `Reading: ${STALE_MIN} min old` : 'Reading: fresh'} onPress={() => update($, isStale, b => !b)} />
+          <Button key="bandon" variant="secondary" label={bandOn ? 'Band: on' : 'Band: off'} onPress={() => update($, isBandOn, b => !b)} />
         </Box>
         <Box flexDirection="column" alignItems="center" marginTop={1}>
           {svg(splitRingSvg(180, w5, w7), 'Usage Windows', 180, 180)}
         </Box>
         {gauges}
-        {history}
         <Text dimColor size="caption" mono>
           [proto] surface={e.surface} cols={e.props.bodyColumns} drawW={W} activeH={s.activeH}
         </Text>

@@ -37,24 +37,27 @@ older periods at a time (**Show 5** returns). The ring and all bars were made
 thicker (ring stroke 9% of its size, bars 11px) and the ring's two arc gaps at
 10 and 2 o'clock widened to ~9° clear of the round caps.
 
-## The band above the prompt → a Burn Rate speedometer (hbfelizzola/ai-pal#17)
+## Band with four bars + Burn Rate speedometer (hbfelizzola/ai-pal#17)
 
-Five band layouts with the 5-hour time bar, three wordings and the Burn Rate
-were tried (commit 7a184d3) and didn't read clearly; the band time bar is left
-to v2. Instead, the pane gets a **Burn Rate speedometer** under the ring:
+Band layouts with wordings were tried first (commit 7a184d3). Where it landed:
 
-- The needle is the Burn Rate (%/h of Active Use). Three zones on the dial:
-  amber below r1, the window's colour from r1 to r2, grey above r2.
-- r1 = Unused Allowance ÷ the Active Use you can expect before the Reset
-  (5-hour: the time to Reset, nonstop; weekly: your usual share of Active Use,
-  rolling 7 days, of the time to Reset); r2 = 2 × r1.
-- The centre shows the rate and one of three calls: **Use more** · or a bigger
-  model (below r1: some would go unused), **On track** · keep this pace,
-  **Ease off** · or a lighter model (above r2: runs out with time to spare).
-  A caption under it says why (`~26% would go unused even nonstop · resets in
-  2h 0m`).
-- Under 1 h of Active Use: an empty dial with `Burn Rate after 1 h of Active Use`.
+- **Band**: four bars across the full width, a column per window (5-hour
+  left, weekly right). Top row: Unused Allowance (`5-hour 62% · 2h 0m`).
+  Bottom row: the time bar (`at 18%/h`): grey track = time to Reset, window
+  gradient = Active Use the rest lasts at that Burn Rate, amber hatching past
+  the Reset tick when it won't fit. Labels sit inline, sharing one width so the
+  four bars line up. Under 1 h of Active Use the time bar is a countdown with
+  `Burn Rate after 1 h`. A stale Reading fades the band, adds `~`, and appends
+  `42 min old` in amber.
+- **Pane**: the ring, then a **Burn Rate speedometer**: needle at the Burn
+  Rate (%/h of Active Use), three zones, and in the centre one of three calls:
+  **Use more** · or a bigger model, **On track** · keep this pace, **Ease off**
+  · or a lighter model, with a caption saying why. Zones: r1 = Unused Allowance
+  ÷ the Active Use you can expect before the Reset (5-hour: the time to Reset,
+  nonstop; weekly: your usual share of Active Use, rolling 7 days, of the time
+  to Reset); r2 = 2 × r1.
+- **Left to v2**: the pane's time bars and Lost Allowance history (#14).
 
 ◀ ▶ switch **A · 5-hour gauge** and **B · Two gauges**; **Data** cycles the
-mock scenarios (Steady added for On track); **Time bars** keeps or drops #14's
-time bars under the history.
+mock scenarios (Steady added for On track); **Reading** toggles stale;
+**Band** turns the band off.
