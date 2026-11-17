@@ -1,6 +1,7 @@
-// The split ring's markup: the 5-hour arc across the top from 10 to 2
-// o'clock, the weekly arc through the bottom, each filled by its Unused
-// Allowance and anchored at 10 o'clock, figures in the centre.
+// The split ring's markup: the 5-hour arc across the top, 240° from 8 to 4
+// o'clock (the window you watch most gets the finer scale), the weekly arc
+// the 120° through the bottom. Each fills by its Unused Allowance, both
+// anchored at 8 o'clock, so both empty toward 4; figures in the centre.
 import { COOL, MUTED, NUDGE, TRACK, WARM, esc, font, gradient } from './look'
 
 /** One half of the ring, as the readout decided to show it. */
@@ -23,7 +24,7 @@ export function ringSvg(size: number, five: Half, week: Half): string {
   const m = size / 2
   const r = (size - sw) / 2 - 1
   // Degrees between the arcs measured past the round caps (which reach sw/2
-  // beyond each end), so the visible gap at 10 and 2 o'clock stays ~9°.
+  // beyond each end), so the visible gap at 8 and 4 o'clock stays ~9°.
   const gap = 9 + ((sw / r) * 180) / Math.PI
   const pt = (deg: number) => {
     const a = ((deg - 90) * Math.PI) / 180
@@ -56,8 +57,8 @@ export function ringSvg(size: number, five: Half, week: Half): string {
     }${esc(half.label)}</text></g>`
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
     `<defs>${gradient('g5', WARM)}${gradient('g7', [COOL[1], COOL[0]])}</defs>` +
-    seg(300, 420, five, 'url(#g5)', false) +
-    seg(60, 300, week, 'url(#g7)', true) +
+    seg(240, 480, five, 'url(#g5)', false) +
+    seg(120, 240, week, 'url(#g7)', true) +
     block(five, WARM[1], m - 36 * k) +
     `<line x1="${m - 26 * k}" y1="${m}" x2="${m + 26 * k}" y2="${m}" stroke="${TRACK}" stroke-width="1"/>` +
     block(week, COOL[1], m + 24 * k) +
