@@ -1,0 +1,6 @@
+{
+  "name": "ai-pal",
+  "version": "1.0.0",
+  "description": "Shows your Claude plan's Unused Allowance and Nudges you before a Reset loses it",
+  "types": "./types/index.d.ts"
+}

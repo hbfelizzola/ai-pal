@@ -1,0 +1,67 @@
+// ai-pal: a Claude Code mod that shows your plan's Unused Allowance per Usage
+// Window and Nudges you, after you've left, before a Reset loses it.
+//
+// Each open session runs its own copy; $.store is the only thing they share.
+// This file is the wiring: engine events in, the modules beside it decide.
+import { atom, read, update } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
+import type { EndpointState } from '../types'
+import { addReadings, loadLog, type Reading, type WindowId } from './log'
+import { ENDPOINT, ENDPOINT_HEADERS, newPoller, onFailure, onReply, passiveReadings, type PollOutcome } from './reader'
+import { drawPane } from './readout'
+import { MIN } from './time'
+
+const PANE = 'ai-pal'
+/** Bumped whenever what the readout draws from may have changed. */
+const rev = atom({ plugin: 'ai-pal', key: 'rev' } as const, 0)
+const endpoint = atom({ plugin: 'ai-pal', key: 'endpoint' } as const, { state: 'unknown' } as EndpointState)
+
+/** This session's poller; a reload starts a fresh one from session.start. */
+const poller = newPoller()
+
+async function record($: EngineInterface, readings: [WindowId, Reading][]) {
+  if (!readings.length) return
+  await addReadings($, readings, await $.clock.now())
+  await update($, rev, n => n + 1)
+}
+
+/** Asks the usage endpoint once and books the next ask. */
+async function poll($: EngineInterface) {
+  const auth = await $.session.authorize()
+  if (!auth) {
+    await update($, endpoint, (): EndpointState => ({ state: 'off', why: 'refused' }))
+    return
+  }
+  let outcome: PollOutcome
+  try {
+    const reply = await $.http.fetch(ENDPOINT, { headers: ENDPOINT_HEADERS, auth: auth.handle })
+    outcome = onReply(poller, reply, await $.clock.now())
+  } catch {
+    outcome = onFailure(poller, await $.clock.now())
+  }
+  await update($, endpoint, () => outcome.state)
+  await record($, outcome.readings)
+  if (outcome.nextIn !== undefined) $.clock.after(outcome.nextIn, () => void poll($))
+}
+
+export const register: Register = on => {
+  on('session.start', async ($, e, next) => {
+    void $.ui.open({ id: PANE, title: 'ai-pal' })
+    // Redraw every minute: countdowns move, and other sessions write Readings.
+    $.clock.every(MIN, () => void update($, rev, n => n + 1))
+    const { rateLimits } = await $.session.usage()
+    await record($, passiveReadings(rateLimits, await $.clock.now()))
+    void poll($)
+    return next(e)
+  })
+
+  on('session.measure', async ($, e, next) => {
+    await record($, passiveReadings(e.rateLimits, await $.clock.now()))
+    return next(e)
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    await read($, rev)
+    return drawPane($, e, { log: await loadLog($), now: await $.clock.now(), endpoint: await read($, endpoint) })
+  })
+}
