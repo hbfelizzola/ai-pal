@@ -3,10 +3,11 @@
 import type { EngineInterface, RenderInput } from 'claude-code'
 import type { EndpointState } from '../types'
 import type { Log, WindowId } from './log'
-import { COOL, WARM, type Pair } from './look'
+import { AMBER, COOL, WARM, type Pair } from './look'
+import { modelLines } from './models'
 import { ringSvg, type Half } from './ring'
 import { standing } from './standing'
-import { resetLabel, until } from './time'
+import { ago, hhmm, resetLabel, until } from './time'
 
 export const WINDOWS = {
   five_hour: { name: '5-hour', colors: WARM },
@@ -17,22 +18,50 @@ export type MainWindow = keyof typeof WINDOWS
 /** Everything one drawing reads. */
 export type Scene = { log: Log; now: number; endpoint: EndpointState }
 
-const pct = (n: number) => `${Math.round(n)}%`
+export const pct = (n: number) => `${Math.round(n)}%`
+const SOURCE_NAMES = { api: 'usage API', session: 'session data' } as const
 
 export function half(scene: Scene, id: MainWindow): Half {
   const { name } = WINDOWS[id]
   const s = standing(scene.log, id, scene.now)
-  if (s.state !== 'read') return { big: '…', label: name, isDashed: true, isFaded: false, isNudgeBooked: false }
-  const { left, resetsAt } = s.reading
+  const base = { isDashed: false, isFaded: false, isNudgeBooked: false }
+  if (s.state === 'missing') return { ...base, big: '…', label: name, isDashed: true }
+  // Never an assumed full window: the allowance may have been spent elsewhere.
+  if (s.state === 'reset') return { ...base, big: 'Reset', label: `${name} · new window`, isDashed: true, tip: `${name} · reset at ${hhmm(s.reading.resetsAt)}, no Reading of the new window yet` }
+  const { left, resetsAt, at, source } = s.reading
+  const toReset = `resets in ${until(resetsAt - scene.now)}`
   return {
+    ...base,
     fill: left,
-    big: pct(left),
+    big: `${s.isStale ? '~' : ''}${pct(left)}`,
     label: `${name} · ${resetLabel(resetsAt, scene.now)}`,
-    tip: `${name} · ${pct(left)} left · resets in ${until(resetsAt - scene.now)}`,
-    isDashed: false,
-    isFaded: false,
-    isNudgeBooked: false,
+    tip: s.isStale
+      ? `${name} · ${pct(left)} left as of ${hhmm(at)} (${ago(scene.now - at)}, ${SOURCE_NAMES[source]}) · ${toReset}`
+      : `${name} · ${pct(left)} left · ${toReset}`,
+    isFaded: s.isStale,
   }
+}
+
+/** The line under the ring: how old the figures are and, when it matters, why. */
+export function footnote(scene: Scene): { text: string; isAmber: boolean } {
+  const { endpoint, now } = scene
+  const states = (['five_hour', 'seven_day'] as const).map(id => [id, standing(scene.log, id, now)] as const)
+  const isEndpointDown = endpoint.state === 'off' || endpoint.state === 'backoff'
+  if (states.every(([, s]) => s.state === 'missing'))
+    return { text: isEndpointDown ? 'No reading yet: send a message' : 'Checking usage…', isAmber: false }
+
+  const ages = states.flatMap(([, s]) => (s.state === 'read' ? [now - s.reading.at] : []))
+  const age = ages.length ? Math.max(...ages) : Math.min(...states.flatMap(([, s]) => (s.state === 'reset' ? [now - s.reading.at] : [])))
+  const parts = [`Updated ${ago(age)}`]
+  if (endpoint.state === 'backoff') parts.push(`Usage API busy (${endpoint.status}), retrying at ${hhmm(endpoint.until)}`)
+  else if (endpoint.state === 'off') parts.push(endpoint.why === 'refused' ? 'session data only' : 'usage API unreadable · session data only')
+  for (const [id, s] of states) {
+    if (s.state === 'reset') parts.push(`${WINDOWS[id].name} reset, waiting for a Reading`)
+    if (s.state === 'missing') parts.push(`no ${WINDOWS[id].name.toLowerCase()} Reading yet`)
+  }
+  const isStale = states.some(([, s]) => s.state === 'read' && s.isStale)
+  if (isStale && parts.length === 1) parts.push('no newer Reading')
+  return { text: parts.join(' · '), isAmber: isStale || states.some(([, s]) => s.state === 'reset') }
 }
 
 export function drawPane($: EngineInterface, e: RenderInput<'Pane'>, scene: Scene) {
@@ -53,9 +82,18 @@ export function drawPane($: EngineInterface, e: RenderInput<'Pane'>, scene: Scen
       </Box>
     )
 
+  const foot = footnote(scene)
+  // Only the endpoint reports model-specific windows: with it off, their figures can't be kept current.
+  const models = scene.endpoint.state === 'off' ? [] : modelLines(scene.log, scene.now)
   return (
     <Box flexDirection="column" alignItems="center" gap={1}>
       {ring}
+      {models.length > 0 && (
+        <Box flexDirection="column">
+          {models.map(m => <Text size="footnote" dimColor={m.isStale}>{m.text}</Text>)}
+        </Box>
+      )}
+      <Text size="footnote" color={foot.isAmber ? AMBER : undefined} dimColor={!foot.isAmber}>{foot.text}</Text>
     </Box>
   )
 }

@@ -31,6 +31,7 @@ export function until(ms: number): string {
 /** How long ago: `2m ago`, `45m ago`, `3h ago`. */
 export function ago(ms: number): string {
   const m = Math.max(0, Math.round(ms / MIN))
+  if (m < 1) return 'just now'
   if (m < 60) return `${m}m ago`
   const h = Math.floor(m / 60)
   if (h < 48) return `${h}h ago`
@@ -38,7 +39,7 @@ export function ago(ms: number): string {
 }
 
 /** An age as a figure's suffix: `45m old`, `3h old`. */
-export const old = (ms: number) => ago(ms).replace(' ago', ' old')
+export const old = (ms: number) => (ms < MIN ? 'just now' : ago(ms).replace(' ago', ' old'))
 
 /** Time to a Reset as the ring and band show it: a countdown under 24 h, a weekday and time beyond. */
 export const resetLabel = (resetsAt: number, now: number) =>

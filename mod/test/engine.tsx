@@ -80,6 +80,7 @@ export function engine(on: On, options: { now?: number; store?: Record<string, u
   let authorization: { handle: string; kind: 'bearer' } | null = null
   let replies: Reply[] = []
   let lastReply: Reply = { status: 500, text: '' }
+  let replyDelay = 0
 
   const copy = (v: unknown) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
   on('store.get', (_, e) => ({ value: copy(store.get(e.key)) }))
@@ -96,7 +97,8 @@ export function engine(on: On, options: { now?: number; store?: Record<string, u
     value: { startedAt: NOW, context: { percent: null } as never, rateLimits },
   }))
   on('session.authorize', () => ({ value: authorization }))
-  on('http.fetch', (_, e) => {
+  on('http.fetch', async (_, e) => {
+    if (replyDelay) await clock.sleep(replyDelay)
     fetches.push({ url: e.url, headers: { ...(e.init?.headers ?? {}) }, auth: e.init?.auth })
     fetchTimes.push(clock.now())
     const r = replies.shift() ?? lastReply
@@ -117,6 +119,10 @@ export function engine(on: On, options: { now?: number; store?: Record<string, u
     /** Signs the session in, so the usage endpoint can be reached. */
     signIn() {
       authorization = { handle: 'handle-1', kind: 'bearer' }
+    },
+    /** How long the endpoint takes to answer, on the mocked clock. */
+    slowReplies(ms: number) {
+      replyDelay = ms
     },
     /** The endpoint's next replies, in order; the last one repeats. */
     reply(...rs: Reply[]) {
