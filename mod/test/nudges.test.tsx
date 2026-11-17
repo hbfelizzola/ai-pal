@@ -1,6 +1,6 @@
 // #25 Book and rebook Unused Allowance Nudges.
 import { expect, test, type Engine } from 'claude-code/testing'
-import { MIN, at, engine, iso, limit, shown, type World } from './engine'
+import { MIN, at, engine, limit, nudgeKey, shown, type World } from './engine'
 
 const start = async ($: Engine, w: World) => {
   await $.session.start({ cwd: '/', surface: null, isInteractive: true })
@@ -19,7 +19,7 @@ test('62% left of the 5-hour window, you have left: a Nudge 1 h before the Reset
   expect(w.notified).toEqual([{
     text: '5-hour: 62% left as of 14:00, resets in 1h. Use it before it\'s gone.',
     title: 'ai-pal',
-    key: `five_hour|${iso(FIVE_RESET)}|1h`,
+    key: nudgeKey('five_hour', FIVE_RESET, '1h'),
     at: at(0, 15, 12),
     untilBack: true,
   }])
@@ -37,8 +37,8 @@ test('weekly: Nudges 24 h and 3 h before the Reset with 30% or more left', async
   await start($, w)
   await measure($, limit('seven_day', 60, WEEK_RESET))
   expect(w.notified.map(n => [n.key, n.at, n.text])).toEqual([
-    [`seven_day|${iso(WEEK_RESET)}|24h`, at(2, 18), 'Weekly: 40% left as of 14:00, resets in 24h. Use it before it\'s gone.'],
-    [`seven_day|${iso(WEEK_RESET)}|3h`, at(3, 15), 'Weekly: 40% left as of 14:00, resets in 3h. Use it before it\'s gone.'],
+    [nudgeKey('seven_day', WEEK_RESET, '24h'), at(2, 18), 'Weekly: 40% left as of 14:00, resets in 24h. Use it before it\'s gone.'],
+    [nudgeKey('seven_day', WEEK_RESET, '3h'), at(3, 15), 'Weekly: 40% left as of 14:00, resets in 3h. Use it before it\'s gone.'],
   ])
 })
 
@@ -58,7 +58,7 @@ test('each new Reading rebooks under the same key with the new figure, and cance
   expect(w.notified).toHaveLength(2)
   await w.clock.advance(10 * MIN)
   await measure($, limit('five_hour', 65, FIVE_RESET))
-  expect(w.cancelled).toEqual([`five_hour|${iso(FIVE_RESET)}|1h`])
+  expect(w.cancelled).toEqual([nudgeKey('five_hour', FIVE_RESET, '1h')])
 })
 
 test('a stale Reading keeps its booked Nudges', async ($, on) => {
@@ -74,9 +74,9 @@ test('after a Reset, the new window gets Nudges only once a Reading of it arrive
   const w = engine(on, { now: at(0, 16, 30), store: { 'readings:five_hour': [{ at: at(0, 15), source: 'api', left: 80, resetsAt: FIVE_RESET }] } })
   await start($, w)
   await measure($, limit('seven_day', 60, WEEK_RESET))
-  expect(w.notified.filter(n => n.key?.startsWith('five_hour'))).toEqual([])
+  expect(w.notified.filter(n => n.key?.startsWith('5h'))).toEqual([])
   await measure($, limit('five_hour', 5, at(0, 21, 12)))
-  expect(w.notified.filter(n => n.key?.startsWith('five_hour')).map(n => n.at)).toEqual([at(0, 20, 12)])
+  expect(w.notified.filter(n => n.key?.startsWith('5h')).map(n => n.at)).toEqual([at(0, 20, 12)])
 })
 
 test('booked Nudges are kept in the store, and the Pane marks their window with an amber dot', async ($, on) => {
@@ -84,7 +84,7 @@ test('booked Nudges are kept in the store, and the Pane marks their window with 
   await start($, w)
   await measure($, limit('five_hour', 38, FIVE_RESET), limit('seven_day', 80, WEEK_RESET))
   expect(w.store.get('nudges')).toEqual([
-    expect.objectContaining({ key: `five_hour|${iso(FIVE_RESET)}|1h`, at: at(0, 15, 12) }),
+    expect.objectContaining({ key: nudgeKey('five_hour', FIVE_RESET, '1h'), at: at(0, 15, 12) }),
   ])
   const ui = await $.ui.mount({ ...w.pane, surface: 'desktop' })
   const text = shown(await ui.drawn())

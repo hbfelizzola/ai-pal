@@ -19,6 +19,10 @@ export const at = (dayOffset: number, hours: number, minutes = 0) =>
 
 export const iso = (ms: number) => new Date(ms).toISOString()
 
+/** A Nudge's key: its window, Reset and lead time. */
+export const nudgeKey = (window: 'five_hour' | 'seven_day', resetsAt: number, lead: '1h' | '24h' | '3h') =>
+  `${window === 'five_hour' ? '5h' : 'wk'}-${iso(resetsAt).replace(/\D/g, '').slice(0, 12)}-${lead}`
+
 export type Notified = { text: string; title?: string; key?: string; at?: number; untilBack?: boolean }
 export type Reply = { status: number; body?: unknown; text?: string; headers?: Record<string, string> }
 
