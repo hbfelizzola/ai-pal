@@ -2,6 +2,7 @@
 // speedometer, footnote) and the band above the prompt.
 import type { EngineInterface, RenderInput } from 'claude-code'
 import type { EndpointState } from '../types'
+import type { Booked } from './booker'
 import type { Log, WindowId } from './log'
 import { AMBER, COOL, WARM, type Pair } from './look'
 import { modelLines } from './models'
@@ -18,7 +19,10 @@ export const WINDOWS = {
 export type MainWindow = keyof typeof WINDOWS
 
 /** Everything one drawing reads. */
-export type Scene = { log: Log; now: number; endpoint: EndpointState; slots: readonly number[] }
+export type Scene = { log: Log; now: number; endpoint: EndpointState; slots: readonly number[]; booked: readonly Booked[] }
+
+/** Whether a window has a Nudge booked: the amber dot before its label. */
+export const isBooked = (scene: Scene, id: MainWindow) => scene.booked.some(b => b.windows.includes(id))
 
 /** A main window's Pace Call, when there is a Burn Rate and a current figure to judge. */
 export function paceOf(scene: Scene, id: MainWindow): Pace | undefined {
@@ -34,7 +38,7 @@ const SOURCE_NAMES = { api: 'usage API', session: 'session data' } as const
 export function half(scene: Scene, id: MainWindow): Half {
   const { name } = WINDOWS[id]
   const s = standing(scene.log, id, scene.now)
-  const base = { isDashed: false, isFaded: false, isNudgeBooked: false }
+  const base = { isDashed: false, isFaded: false, isNudgeBooked: isBooked(scene, id) }
   if (s.state === 'missing') return { ...base, big: '…', label: name, isDashed: true }
   // Never an assumed full window: the allowance may have been spent elsewhere.
   if (s.state === 'reset') return { ...base, big: 'Reset', label: `${name} · new window`, isDashed: true, tip: `${name} · reset at ${hhmm(s.reading.resetsAt)}, no Reading of the new window yet` }
@@ -86,7 +90,7 @@ export function drawPane($: EngineInterface, e: RenderInput<'Pane'>, scene: Scen
       <Box flexDirection="column">
         {([[five, WARM], [week, COOL]] as const).map(([x, c]) => (
           <Text dimColor={x.isFaded}>
-            <Text color={x.isDashed ? undefined : c[1]} bold>{x.big}</Text> <Text dimColor>{x.label}</Text>
+            <Text color={x.isDashed ? undefined : c[1]} bold>{x.big}</Text> {x.isNudgeBooked && <Text color={AMBER}>● </Text>}<Text dimColor>{x.label}</Text>
           </Text>
         ))}
       </Box>

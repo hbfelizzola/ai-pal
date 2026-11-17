@@ -10,6 +10,9 @@ import { slotsOf } from './figures'
 import { addReadings, addSlots, loadLog, loadSlots, type Reading, type WindowId } from './log'
 import { ENDPOINT, ENDPOINT_HEADERS, newPoller, onFailure, onReply, passiveReadings, type PollOutcome } from './reader'
 import { drawBand } from './band'
+import { loadBooked, reconcile } from './booker'
+import { plan } from './planner'
+import { loadSettings } from './settings'
 import { drawPane, type Scene } from './readout'
 import { MIN } from './time'
 
@@ -20,17 +23,33 @@ const endpoint = atom({ plugin: 'ai-pal', key: 'endpoint' } as const, { state: '
 
 /** This session's poller; a reload starts a fresh one from session.start. */
 const poller = newPoller()
+/**
+ * Whether this session can hold a Nudge until it's due. A terminal ignores
+ * `at` and shows a notification at once, so only a host books them.
+ */
+let canBook = true
 
 async function record($: EngineInterface, readings: [WindowId, Reading][]) {
   if (!readings.length) return
   await addReadings($, readings, await $.clock.now())
+  await reevaluate($)
+}
+
+/** Re-plans the Nudges from the newest Readings and settings, and books the difference. */
+async function reevaluate($: EngineInterface) {
+  const now = await $.clock.now()
+  const change = canBook
+    ? await reconcile($, plan({ log: await loadLog($), now, settings: await loadSettings($) }).nudges, now)
+    : { booked: [], cancelled: [] }
   await update($, rev, n => n + 1)
+  return change
 }
 
 /** What a drawing reads; reading `rev` redraws it on every change. */
 async function scene($: EngineInterface): Promise<Scene> {
   await read($, rev)
-  return { log: await loadLog($), now: await $.clock.now(), endpoint: await read($, endpoint), slots: await loadSlots($) }
+  const now = await $.clock.now()
+  return { log: await loadLog($), now, endpoint: await read($, endpoint), slots: await loadSlots($), booked: await loadBooked($, now) }
 }
 
 /** Asks the usage endpoint once and books the next ask. */
@@ -54,6 +73,7 @@ async function poll($: EngineInterface) {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    canBook = e.surface !== 'terminal'
     void $.ui.open({ id: PANE, title: 'ai-pal' })
     // Redraw every minute: countdowns move, and other sessions write Readings.
     $.clock.every(MIN, () => void update($, rev, n => n + 1))
@@ -79,6 +99,6 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
-    return drawBand($, e, await scene($), new Set()) ?? next(e)
+    return drawBand($, e, await scene($)) ?? next(e)
   })
 }

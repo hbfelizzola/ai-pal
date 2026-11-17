@@ -5,7 +5,7 @@ import type { EngineInterface, RenderInput } from 'claude-code'
 import { CALL_WORDS, type Pace } from './figures'
 import { CALL_COLOR, niceMax } from './gauge'
 import { AMBER, GREY, MUTED, NUDGE, TRACK, esc, font, gradient } from './look'
-import { WINDOWS, half, paceOf, type MainWindow, type Scene } from './readout'
+import { WINDOWS, half, isBooked, paceOf, type MainWindow, type Scene } from './readout'
 import { standing, type Standing } from './standing'
 import { DAY, H, old, rate, resetLabel, until } from './time'
 
@@ -118,8 +118,8 @@ function line(c: Column): string {
 }
 
 /** The band, or undefined to leave the row to the engine (nothing stored). */
-export function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>, scene: Scene, booked: ReadonlySet<MainWindow>) {
-  const cols: [Column, Column] = [column(scene, 'five_hour', booked.has('five_hour')), column(scene, 'seven_day', booked.has('seven_day'))]
+export function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>, scene: Scene) {
+  const cols: [Column, Column] = [column(scene, 'five_hour', isBooked(scene, 'five_hour')), column(scene, 'seven_day', isBooked(scene, 'seven_day'))]
   if (cols.every(c => c.s.state === 'missing')) return undefined
   const { Box, Text } = $.ui.resolve(e)
   const lines = cols.map(line)
