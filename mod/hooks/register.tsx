@@ -9,7 +9,8 @@ import type { EndpointState } from '../types'
 import { slotsOf } from './figures'
 import { addReadings, addSlots, loadLog, loadSlots, type Reading, type WindowId } from './log'
 import { ENDPOINT, ENDPOINT_HEADERS, newPoller, onFailure, onReply, passiveReadings, type PollOutcome } from './reader'
-import { drawPane } from './readout'
+import { drawBand } from './band'
+import { drawPane, type Scene } from './readout'
 import { MIN } from './time'
 
 const PANE = 'ai-pal'
@@ -24,6 +25,12 @@ async function record($: EngineInterface, readings: [WindowId, Reading][]) {
   if (!readings.length) return
   await addReadings($, readings, await $.clock.now())
   await update($, rev, n => n + 1)
+}
+
+/** What a drawing reads; reading `rev` redraws it on every change. */
+async function scene($: EngineInterface): Promise<Scene> {
+  await read($, rev)
+  return { log: await loadLog($), now: await $.clock.now(), endpoint: await read($, endpoint), slots: await loadSlots($) }
 }
 
 /** Asks the usage endpoint once and books the next ask. */
@@ -68,8 +75,10 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    await read($, rev)
-    return drawPane($, e, { log: await loadLog($), now: await $.clock.now(), endpoint: await read($, endpoint), slots: await loadSlots($) })
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawPane($, e, await scene($)))
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
+    return drawBand($, e, await scene($), new Set()) ?? next(e)
   })
 }
