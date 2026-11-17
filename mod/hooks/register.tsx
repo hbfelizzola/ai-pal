@@ -11,10 +11,11 @@ import { addReadings, addSlots, loadLog, loadSlots, type Reading, type WindowId 
 import { ENDPOINT, ENDPOINT_HEADERS, newPoller, onFailure, onReply, passiveReadings, type PollOutcome } from './reader'
 import { drawBand } from './band'
 import { loadBooked, reconcile } from './booker'
+import { changed, listing, request } from './command'
 import { plan } from './planner'
-import { loadSettings } from './settings'
+import { loadSettings, saveSettings } from './settings'
 import { drawPane, type Scene } from './readout'
-import { MIN } from './time'
+import { DAY, MIN } from './time'
 
 const PANE = 'ai-pal'
 /** Bumped whenever what the readout draws from may have changed. */
@@ -43,6 +44,50 @@ async function reevaluate($: EngineInterface) {
     : { booked: [], cancelled: [] }
   await update($, rev, n => n + 1)
   return change
+}
+
+/**
+ * Claude Code deletes a mod's data after `cleanupPeriodDays` without use. A
+ * store last used longer ago than that is cleared here the same way, and
+ * `/ai-pal` says once that the settings are back to the defaults.
+ */
+async function housekeep($: EngineInterface) {
+  const now = await $.clock.now()
+  let days = 30
+  try {
+    const v = await $.settings.read({ key: 'cleanupPeriodDays' })
+    if (typeof v === 'number' && v > 0) days = v
+  } catch {
+    // The default stands.
+  }
+  const seen = await $.store.get('seen')
+  if (typeof seen === 'number' && now - seen > days * DAY) {
+    for (const key of await $.store.keys()) await $.store.delete(key)
+    await $.store.set('notice', `ai-pal went unused for over ${days} days, so its data was cleared and its settings are back to the defaults.`)
+  }
+  await $.store.set('seen', now)
+}
+
+/** `/ai-pal`'s answer. */
+async function answer($: EngineInterface, args: string): Promise<string> {
+  const req = request(args, await loadSettings($))
+  if (req.kind === 'refuse') return req.text
+  if (req.kind === 'change') {
+    await saveSettings($, req.settings)
+    return `${req.said}\n${changed(await reevaluate($))}`
+  }
+  await reevaluate($)
+  const notes: string[] = []
+  const notice = await $.store.get('notice')
+  if (typeof notice === 'string') {
+    notes.push(notice)
+    await $.store.delete('notice')
+  }
+  if (!canBook) notes.push('This terminal session books no Nudges (a terminal would show them at once); sessions in the Claude desktop app do.')
+  const now = await $.clock.now()
+  const settings = await loadSettings($)
+  const p = plan({ log: await loadLog($), now, settings, slots: await loadSlots($) })
+  return listing(settings, await loadBooked($, now), p, notes)
 }
 
 /** What a drawing reads; reading `rev` redraws it on every change. */
@@ -74,6 +119,12 @@ async function poll($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     canBook = e.surface !== 'terminal'
+    await housekeep($)
+    await $.command.register({
+      name: 'ai-pal',
+      description: 'Show ai-pal\'s settings and booked Nudges, or change a setting',
+      argumentHint: '[set <setting> <value> | reset [setting]]',
+    })
     void $.ui.open({ id: PANE, title: 'ai-pal' })
     // Redraw every minute: countdowns move, and other sessions write Readings.
     $.clock.every(MIN, () => void update($, rev, n => n + 1))
@@ -95,10 +146,12 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('command.run', { command: 'ai-pal' }, async ($, e) => ({ text: await answer($, e.args) }))
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawPane($, e, await scene($)))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
+    if (e.props.hasSurvey || !(await loadSettings($)).band) return next(e)
     return drawBand($, e, await scene($)) ?? next(e)
   })
 }
