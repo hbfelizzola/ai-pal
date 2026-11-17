@@ -4,7 +4,16 @@
 import type { EngineInterface } from 'claude-code'
 import type { MainWindow, Planned } from './planner'
 
-export type Booked = { key: string; at: number; text: string; windows: MainWindow[]; leads: string[] }
+export type Booked = {
+  key: string
+  at: number
+  text: string
+  windows: MainWindow[]
+  leads: string[]
+  /** The model lines in `text`, and the model windows left out of it. */
+  models: string[]
+  notWith: string[]
+}
 export type Change = { booked: Booked[]; cancelled: Booked[] }
 
 const KEY = 'nudges'
@@ -12,6 +21,7 @@ export const TITLE = 'ai-pal'
 
 const asBooked = (p: Planned): Booked => ({
   key: p.key, at: p.at, text: p.text, windows: p.parts.map(x => x.window), leads: p.parts.map(x => x.lead),
+  models: p.models, notWith: p.notWith,
 })
 
 /** What is booked and still to come. */

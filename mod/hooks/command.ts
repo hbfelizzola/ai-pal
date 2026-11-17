@@ -57,7 +57,10 @@ export function listing(settings: Settings, booked: readonly Booked[], plan: Pla
   out.push(booked.length ? 'Booked Nudges:' : 'Booked Nudges: none')
   for (const b of booked) {
     out.push(`  ${describe(b)}`)
-    for (const line of b.text.split('\n')) out.push(`    ${line}`)
+    // Model lines and the model windows left out sit one step further in.
+    const models = new Set(b.models ?? [])
+    for (const line of b.text.split('\n')) out.push(`${models.has(line) ? '      ' : '    '}${line}`)
+    for (const line of b.notWith ?? []) out.push(`      ${line}`)
   }
   const reasons = Object.values(plan.reasons)
   if (reasons.length) {

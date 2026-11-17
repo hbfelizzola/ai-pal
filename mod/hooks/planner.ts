@@ -2,10 +2,11 @@
 // newest Readings, the settings and the clock, and for each window with none,
 // why. Pure; the booker makes it so.
 import { activity, pace, type Activity, type Pace } from './figures'
-import type { Log, Reading } from './log'
+import { modelWindows, type Log, type Reading } from './log'
+import { modelLine } from './models'
 import { isQuiet, quietStart, type Settings } from './settings'
 import { standing } from './standing'
-import { H, MIN, hhmm, hours, untilShort } from './time'
+import { H, MIN, hhmm, hours, untilShort, weekdayTime } from './time'
 
 /** Two Nudges due this close together go out as one. */
 const MERGE_WITHIN = 30 * MIN
@@ -28,6 +29,10 @@ export type Planned = {
   at: number
   text: string
   parts: Part[]
+  /** The model lines in `text` (weekly Nudges only). */
+  models: string[]
+  /** Model windows left out because they don't Reset with the weekly window. */
+  notWith: string[]
 }
 
 export type Plan = { nudges: Planned[]; reasons: Partial<Record<MainWindow, string>> }
@@ -50,20 +55,39 @@ const head = (p: Part, at: number) =>
 const paceAt = (a: Activity | undefined, p: Part, at: number): Pace | undefined =>
   a && pace(p.window, p.reading.left, p.reading.resetsAt - at, a)
 
-function single(a: Activity | undefined, part: Part, at: number): Planned {
+/**
+ * One line per model-specific window that Resets within 30 min of the weekly
+ * window, whatever its figure, worded as its Pane row; it names its own
+ * Reading's time when that differs from the weekly figure's.
+ */
+function models(log: Log, week: Reading, now: number): Pick<Planned, 'models' | 'notWith'> {
+  const out: Pick<Planned, 'models' | 'notWith'> = { models: [], notWith: [] }
+  for (const name of modelWindows(log)) {
+    const line = modelLine(log, name, now)
+    if (!line) continue
+    if (Math.abs(line.resetsAt - week.resetsAt) > MERGE_WITHIN) out.notWith.push(`${name}: resets ${weekdayTime(line.resetsAt)}, not with weekly`)
+    else out.models.push(hhmm(line.at) === hhmm(week.at) ? line.text : `${line.text} · as of ${hhmm(line.at)}`)
+  }
+  return out
+}
+
+function single(input: PlanInput, a: Activity | undefined, part: Part, at: number): Planned {
   const p = paceAt(a, part, at)
   let closer = CLOSER
+  if (p?.call === 'more') closer = `${part.window === 'five_hour' ? 'Even nonstop' : 'At your usual pace'}, ~${p.unused}% would go unused.`
+  else if (p?.call === 'track') closer = `~${hours(p.needH)} h of use spends it.`
+  const m = part.window === 'seven_day' ? models(input.log, part.reading, input.now) : { models: [], notWith: [] }
+  // Model lines go last, so a truncated notification loses them first; only the advice follows.
+  const lines = [`${head(part, at)}. ${closer}`, ...m.models]
   if (p?.call === 'more') {
-    const how = part.window === 'five_hour' ? 'Even nonstop' : 'At your usual pace'
-    closer = `${how}, ~${p.unused}% would go unused. ${BIGGER}`
-  } else if (p?.call === 'track') {
-    closer = `~${hours(p.needH)} h of use spends it.`
+    if (m.models.length) lines.push(BIGGER)
+    else lines[0] += ` ${BIGGER}`
   }
-  return { key: keyOf(part), at, text: `${head(part, at)}. ${closer}`, parts: [part] }
+  return { key: keyOf(part), at, text: lines.join('\n'), parts: [part], ...m }
 }
 
 /** A 5-hour and a weekly Nudge as one notification, at the earlier of the two. */
-function merged(a: Activity | undefined, five: Candidate, week: Candidate): Planned {
+function merged(input: PlanInput, a: Activity | undefined, five: Candidate, week: Candidate): Planned {
   const at = Math.min(five.at, week.at)
   const paces = [five, week].map(c => paceAt(a, c.part, at))
   const lines = [five, week].map((c, i) => {
@@ -73,9 +97,11 @@ function merged(a: Activity | undefined, five: Candidate, week: Candidate): Plan
       : p?.call === 'track' ? ` · ~${hours(p.needH)} h of use spends it` : ''
     return head(c.part, at) + why
   })
+  const m = models(input.log, week.part.reading, input.now)
+  lines.push(...m.models)
   if (paces.some(p => p?.call === 'more')) lines.push(BIGGER)
   else if (!paces.some(p => p?.call === 'track')) lines.push(CLOSER)
-  return { key: `${keyOf(five.part)}+${keyOf(week.part)}`, at, text: lines.join('\n'), parts: [five.part, week.part] }
+  return { key: `${keyOf(five.part)}+${keyOf(week.part)}`, at, text: lines.join('\n'), parts: [five.part, week.part], ...m }
 }
 
 type Candidate = { part: Part; at: number }
@@ -134,8 +160,8 @@ export function plan(input: PlanInput): Plan {
   const a = activity(log, input.slots, now)
   const [f] = five
   const partner = f && week.filter(c => Math.abs(c.at - f.at) <= MERGE_WITHIN).sort((a, b) => Math.abs(a.at - f.at) - Math.abs(b.at - f.at))[0]
-  if (f && partner) nudges.push(merged(a, f, partner))
-  else if (f) nudges.push(single(a, f.part, f.at))
-  for (const c of week) if (c !== partner) nudges.push(single(a, c.part, c.at))
+  if (f && partner) nudges.push(merged(input, a, f, partner))
+  else if (f) nudges.push(single(input, a, f.part, f.at))
+  for (const c of week) if (c !== partner) nudges.push(single(input, a, c.part, c.at))
   return { nudges: nudges.sort((a, b) => a.at - b.at), reasons }
 }
