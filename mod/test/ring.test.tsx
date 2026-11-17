@@ -30,7 +30,7 @@ test('after a response, the ring shows each window\'s % left and time to Reset',
   }
 })
 
-test('the desktop ring is a 180px split ring in the window colours with a tooltip per arc', async ($, on) => {
+test('the desktop ring is a 210px split ring in the window colours with a tooltip per arc', async ($, on) => {
   const w = engine(on)
   await start($)
   await $.session.measure({
@@ -39,8 +39,11 @@ test('the desktop ring is a 180px split ring in the window colours with a toolti
   })
   const ui = await $.ui.mount({ ...w.pane, surface: 'desktop' })
   const text = shown(await ui.drawn())
-  expect(text).toContain('width="180" height="180"')
-  expect(text).toContain('stroke-width="16.2"')
+  expect(text).toContain('width="210" height="210"')
+  expect(text).toContain('stroke-width="18.9"')
+  // The figures keep their size, so the wider ring leaves the labels more room.
+  expect(text).toContain('font-size="30.0"')
+  expect(text).toContain('font-size="11.0"')
   for (const c of ['#F6A15B', '#E0703F', '#9A9AF7', '#5E5ED8', 'rgba(142,142,142,0.28)']) expect(text).toContain(c)
   expect(text).toContain('<title>Weekly · 47% left · resets in 2d 4h</title>')
   expect(text).toContain('<title>5-hour · 62% left · resets in 2h 0m</title>')

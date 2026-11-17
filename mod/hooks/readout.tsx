@@ -28,6 +28,9 @@ export function paceOf(scene: Scene, id: MainWindow): Pace | undefined {
   return pace(id, s.reading.left, s.reading.resetsAt - scene.now, a)
 }
 
+/** The ring's size in px: wide enough that `● Weekly · Fri 01:00` clears the arcs. */
+const RING = 210
+
 export const pct = (n: number) => `${Math.round(n)}%`
 const SOURCE_NAMES = { api: 'usage API', session: 'session data' } as const
 
@@ -81,7 +84,7 @@ export function drawPane($: EngineInterface, e: RenderInput<'Pane'>, scene: Scen
   const alt = [five, week].map(x => `${x.big} ${x.label}`).join('; ')
 
   const ring = e.surface !== 'terminal'
-    ? svg($, e, ringSvg(180, five, week), alt, 180, 180)
+    ? svg($, e, ringSvg(RING, five, week), alt, RING, RING)
     : (
       <Box flexDirection="column">
         {([[five, WARM], [week, COOL]] as const).map(([x, c]) => (

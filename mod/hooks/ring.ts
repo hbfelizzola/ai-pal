@@ -45,7 +45,9 @@ export function ringSvg(size: number, five: Half, week: Half): string {
         : '') +
       `<path d="${arc(from, to)}" fill="none" stroke="transparent" stroke-width="${sw * 2.5}"/></g>`
   }
-  const k = size / 180
+  // The figures are sized for a 180px ring and stay so: a wider ring leaves
+  // the centre's labels clear of the arcs.
+  const k = 1
   const block = (half: Half, color: string, y: number) =>
     `<g opacity="${half.isFaded ? 0.4 : 1}">${half.tip ? `<title>${esc(half.tip)}</title>` : ''}` +
     `<text x="${m}" y="${y}" text-anchor="middle" dominant-baseline="central" ${font} font-weight="650" font-size="${(30 * k).toFixed(1)}" fill="${half.isDashed ? MUTED : color}">${esc(half.big)}</text>` +
