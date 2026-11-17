@@ -1,22 +1,18 @@
-// The Readout: the docked Pane (split ring, model rows, Burn Rate
-// speedometer, footnote) and the band above the prompt.
+// The Readout's Pane: the split ring, model rows, Burn Rate speedometer and
+// footnote, and the figures it shares with the band (band.tsx).
 import type { EngineInterface, RenderInput } from 'claude-code'
 import type { EndpointState } from '../types'
 import type { Booked } from './booker'
-import type { Log, WindowId } from './log'
-import { AMBER, COOL, WARM, type Pair } from './look'
+import type { Log } from './log'
+import { AMBER, COOL, WARM } from './look'
+import { WINDOWS, type MainWindow } from './windows'
 import { modelLines } from './models'
-import { activity, CALL_HINTS, CALL_WORDS, pace, type Pace } from './figures'
-import { CALL_COLOR, gaugeSvg } from './gauge'
+import { activity, PACE_CALL_HINTS, PACE_CALL_WORDS, pace, type Pace } from './figures'
+import { paceCallColor, gaugeSvg } from './gauge'
 import { ringSvg, type Half } from './ring'
 import { standing } from './standing'
 import { ago, hhmm, rate, resetLabel, until } from './time'
 
-export const WINDOWS = {
-  five_hour: { name: '5-hour', colors: WARM },
-  seven_day: { name: 'Weekly', colors: COOL },
-} as const satisfies Record<string, { name: string; colors: Pair }>
-export type MainWindow = keyof typeof WINDOWS
 
 /** Everything one drawing reads. */
 export type Scene = { log: Log; now: number; endpoint: EndpointState; slots: readonly number[]; booked: readonly Booked[] }
@@ -126,22 +122,21 @@ function speedometer($: EngineInterface, e: RenderInput<'Pane'>, scene: Scene) {
     return (
       <Box flexDirection="column">
         <Text>
-          Burn Rate <Text bold>{`${rate(p.rate)}${p.unit}`}</Text> · <Text color={CALL_COLOR(p, WARM)} bold>{CALL_WORDS[p.call]}</Text> <Text dimColor>{CALL_HINTS[p.call]}</Text>
+          Burn Rate <Text bold>{`${rate(p.rate)}${p.unit}`}</Text> · <Text color={paceCallColor(p, WARM)} bold>{PACE_CALL_WORDS[p.paceCall]}</Text> <Text dimColor>{PACE_CALL_HINTS[p.paceCall]}</Text>
         </Text>
         <Text dimColor>{p.why}</Text>
       </Box>
     )
   }
   const [source, height] = gaugeSvg(200, '5-hour', WARM, p, note)
-  const alt = p ? `5-hour Burn Rate ${rate(p.rate)}${p.unit}: ${CALL_WORDS[p.call]}, ${CALL_HINTS[p.call]}. ${p.why}` : `5-hour: ${note.join(' ')}`
+  const alt = p ? `5-hour Burn Rate ${rate(p.rate)}${p.unit}: ${PACE_CALL_WORDS[p.paceCall]}, ${PACE_CALL_HINTS[p.paceCall]}. ${p.why}` : `5-hour: ${note.join(' ')}`
   return svg($, e, source, alt, 200, height)
 }
 
 /** An Svg where the surface draws one; the terminal gets the same figures as text instead. */
-function svg($: EngineInterface, e: RenderInput<'Pane' | 'AbovePrompt'>, source: string, alt: string, width: number, height: number) {
+function svg($: EngineInterface, e: RenderInput<'Pane'>, source: string, alt: string, width: number, height: number) {
   if (e.surface === 'terminal') return null
   const { Svg } = $.ui.resolve(e)
   return <Svg isInteractive source={source} alt={alt} width={width} height={height} />
 }
 
-export const mainWindows = Object.keys(WINDOWS) as WindowId[]

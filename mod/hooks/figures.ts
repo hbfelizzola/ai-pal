@@ -39,9 +39,9 @@ export function spent(readings: readonly Reading[], now: number): number {
   }, 0)
 }
 
-export type Call = 'more' | 'track' | 'ease'
-export const CALL_WORDS = { more: 'Use more', track: 'On track', ease: 'Ease off' } as const
-export const CALL_HINTS = { more: 'or a bigger model', track: 'keep this pace', ease: 'or a lighter model' } as const
+export type PaceCall = 'more' | 'track' | 'ease'
+export const PACE_CALL_WORDS = { more: 'Use more', track: 'On track', ease: 'Ease off' } as const
+export const PACE_CALL_HINTS = { more: 'or a bigger model', track: 'keep this pace', ease: 'or a lighter model' } as const
 
 export type Pace = {
   kind: 'five_hour' | 'seven_day'
@@ -53,7 +53,7 @@ export type Pace = {
   /** Active Use the Unused Allowance lasts at the Burn Rate, in hours. */
   needH: number
   duty: number
-  call: Call
+  paceCall: PaceCall
   /** The why: `~26% would go unused even nonstop · resets in 2h 0m`. */
   why: string
   /** Unused Allowance that would become Lost Allowance (Use more only). */
@@ -92,23 +92,23 @@ export function pace(kind: Pace['kind'], left: number, toResetMs: number, a: Act
   const needH = burn > 0 ? left / burn : Infinity
   const duty = needH / Math.max(horizonH, 0.01)
   const span = until(toResetMs)
-  let call: Call
+  let paceCall: PaceCall
   let why: string
   let unused: number | undefined
   if (duty > 1) {
-    call = 'more'
+    paceCall = 'more'
     unused = Math.max(1, Math.round(left - burn * horizonH))
     why = `~${unused}% would go unused ${kind === 'five_hour' ? 'even nonstop' : 'at your usual Active Use'} · resets in ${span}`
   } else if (duty >= 0.5) {
-    call = 'track'
+    paceCall = 'track'
     why = `spends it in ~${hours(needH)} h of use · ${span} left`
   } else {
-    call = 'ease'
+    paceCall = 'ease'
     why = `runs out after ~${hours(needH)} h of use · ${span} left`
   }
-  // Either way rate ÷ r1 = 1 ÷ duty, so the dial's zones agree with the call.
+  // Either way rate ÷ r1 = 1 ÷ duty, so the dial's zones agree with the Pace Call.
   const perDay = a.activeH / 7
   const rate = kind === 'five_hour' ? burn : burn * perDay
   const r1 = kind === 'five_hour' ? left / Math.max(horizonH, 0.01) : left / Math.max(toResetH / 24, 0.01)
-  return { kind, burn, left, horizonH, needH, duty, call, why, unused, rate, unit: kind === 'five_hour' ? '%/h' : '%/day', r1, r2: 2 * r1 }
+  return { kind, burn, left, horizonH, needH, duty, paceCall, why, unused, rate, unit: kind === 'five_hour' ? '%/h' : '%/day', r1, r2: 2 * r1 }
 }

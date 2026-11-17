@@ -6,6 +6,7 @@
 // own recent Readings on every write: a write another session clobbered comes
 // back on this session's next one.
 import type { EngineInterface } from 'claude-code'
+import { SLOT } from './figures'
 import { DAY, H } from './time'
 
 export type WindowId = 'five_hour' | 'seven_day' | `model:${string}`
@@ -44,14 +45,25 @@ function merge(id: WindowId, now: number, ...lists: readonly (readonly Reading[]
 const asReadings = (v: unknown): Reading[] =>
   Array.isArray(v) ? v.filter((r): r is Reading => r && typeof r.at === 'number' && typeof r.left === 'number' && typeof r.resetsAt === 'number') : []
 
+/**
+ * Sources disagree on a Reset by a second or so, which snapping can tip into
+ * the next minute: a Reset within this of one already logged is that one.
+ */
+const SAME_RESET = 2 * 60_000
+
+const aligned = (r: Reading, logged: readonly Reading[]): Reading => {
+  const match = [...logged].reverse().find(l => l.resetsAt !== r.resetsAt && Math.abs(l.resetsAt - r.resetsAt) <= SAME_RESET)
+  return match ? { ...r, resetsAt: match.resetsAt } : r
+}
+
 /** Adds Readings to the log, merging with what every session stored. */
 export async function addReadings($: EngineInterface, readings: readonly [WindowId, Reading][], now: number) {
   const ids = new Set(readings.map(([id]) => id))
   for (const id of ids) {
-    const fresh = readings.filter(([i]) => i === id).map(([, r]) => r)
+    const stored = asReadings(await $.store.get(PREFIX + id))
+    const fresh = readings.filter(([i]) => i === id).map(([, r]) => aligned(r, stored))
     const own = [...(mine.get(id) ?? []), ...fresh].filter(r => r.at >= now - H)
     mine.set(id, own)
-    const stored = asReadings(await $.store.get(PREFIX + id))
     await $.store.set(PREFIX + id, merge(id, now, stored, own))
   }
 }
@@ -76,15 +88,14 @@ export const modelWindows = (log: Log): string[] =>
 // Active Use: the 5-minute slots in which Claude ran a turn in any session,
 // pooled the same way (a union, re-merged with this session's own).
 const ACTIVE = 'active'
-const SLOT_MS = 5 * 60_000
 const mySlots = new Set<number>()
 
 const asSlots = (v: unknown): number[] => (Array.isArray(v) ? v.filter((s): s is number => Number.isInteger(s)) : [])
 
 export async function addSlots($: EngineInterface, slots: readonly number[], now: number) {
-  const from = Math.floor((now - 7 * DAY) / SLOT_MS)
+  const from = Math.floor((now - 7 * DAY) / SLOT)
   for (const s of slots) mySlots.add(s)
-  for (const s of mySlots) if (s * SLOT_MS < now - H) mySlots.delete(s)
+  for (const s of mySlots) if (s * SLOT < now - H) mySlots.delete(s)
   const all = new Set([...asSlots(await $.store.get(ACTIVE)), ...slots, ...mySlots])
   await $.store.set(ACTIVE, [...all].filter(s => s >= from).sort((a, b) => a - b))
 }

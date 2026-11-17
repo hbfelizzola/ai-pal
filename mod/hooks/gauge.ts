@@ -1,12 +1,12 @@
 // The 5-hour Burn Rate speedometer: a 240° dial with three zones (amber =
 // use more, warm = on track, grey = ease off), a white needle at the rate,
 // and the rate and Pace Call in the centre.
-import { CALL_HINTS, CALL_WORDS, type Pace } from './figures'
+import { PACE_CALL_HINTS, PACE_CALL_WORDS, type Pace } from './figures'
 import { AMBER, GREY, MUTED, TRACK, esc, font, type Pair } from './look'
 import { rate as rateText } from './time'
 
 const SWEEP = 240
-export const CALL_COLOR = (p: Pace, colors: Pair) => (p.call === 'more' ? AMBER : p.call === 'track' ? colors[1] : GREY)
+export const paceCallColor = (p: Pace, colors: Pair) => (p.paceCall === 'more' ? AMBER : p.paceCall === 'track' ? colors[1] : GREY)
 
 export const niceMax = (v: number) => {
   const step = v <= 10 ? 2 : v <= 50 ? 10 : 20
@@ -56,7 +56,7 @@ export function gaugeSvg(size: number, name: string, colors: Pair, pace: Pace | 
     const anchor = a < -10 ? 'end' : a > 10 ? 'start' : 'middle'
     return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="central" ${font} font-size="${(9.5 * k).toFixed(1)}" fill="${MUTED}">${esc(text)}</text>`
   }
-  const why = `${name} · ${rateText(pace.rate)}${unit} of Active Use · ${CALL_WORDS[pace.call]}: ${pace.why}`
+  const why = `${name} · ${rateText(pace.rate)}${unit} of Active Use · ${PACE_CALL_WORDS[pace.paceCall]}: ${pace.why}`
   const a = ang(pace.rate)
   const [x1, y1] = pt(a, r - sw / 2 - 7 * k)
   const [x2, y2] = pt(a, r + sw / 2 + 1)
@@ -73,8 +73,8 @@ export function gaugeSvg(size: number, name: string, colors: Pair, pace: Pace | 
       `<circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="${(3.5 * k).toFixed(1)}" fill="#FFFFFF" stroke="rgba(0,0,0,0.6)" stroke-width="1"/></g>` +
       `<g><title>${esc(why)}</title>` +
       txt(cx, cy - 12 * k, 26, colors[1], `${rateText(pace.rate)}<tspan font-size="${(13 * k).toFixed(1)}" font-weight="500" fill="${MUTED}">${unit}</tspan>`, ' font-weight="650"') +
-      txt(cx, cy + 14 * k, 14, CALL_COLOR(pace, colors), esc(CALL_WORDS[pace.call]), ' font-weight="650"') +
-      txt(cx, cy + 30 * k, 10.5, MUTED, esc(CALL_HINTS[pace.call])) +
+      txt(cx, cy + 14 * k, 14, paceCallColor(pace, colors), esc(PACE_CALL_WORDS[pace.paceCall]), ' font-weight="650"') +
+      txt(cx, cy + 30 * k, 10.5, MUTED, esc(PACE_CALL_HINTS[pace.paceCall])) +
       `</g></svg>`,
     height,
   ]

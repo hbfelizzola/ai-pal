@@ -2,10 +2,11 @@
 // right), each its Unused Allowance over a speed bar with the rate and the
 // Pace Call. Under 1 h of Active Use the speed bar is a countdown to Reset.
 import type { EngineInterface, RenderInput } from 'claude-code'
-import { CALL_WORDS, type Pace } from './figures'
-import { CALL_COLOR, niceMax } from './gauge'
+import { PACE_CALL_HINTS, PACE_CALL_WORDS, type Pace } from './figures'
+import { paceCallColor, niceMax } from './gauge'
 import { AMBER, GREY, MUTED, NUDGE, TRACK, esc, font, gradient } from './look'
-import { WINDOWS, half, isBooked, paceOf, type MainWindow, type Scene } from './readout'
+import { half, isBooked, paceOf, type Scene } from './readout'
+import { WINDOWS, type MainWindow } from './windows'
 import { standing, type Standing } from './standing'
 import { DAY, H, old, rate, resetLabel, until } from './time'
 
@@ -47,10 +48,10 @@ function column(scene: Scene, id: MainWindow, isNudgeBooked: boolean): Column {
   const top: Span[] = [...dot, [`${name} `, MUTED], [`${s.isStale ? '~' : ''}${Math.round(left)}%`, colors[1], true], [` · ${resetLabel(resetsAt, scene.now)}`, MUTED]]
   if (s.isStale) top.push([` · ${old(scene.now - at)}`, AMBER])
   const bottom: Span[] = p
-    ? [[`${rate(p.rate)}${p.unit}`, colors[1], true], [' · ', MUTED], [CALL_WORDS[p.call], CALL_COLOR(p, colors), true]]
+    ? [[`${rate(p.rate)}${p.unit}`, colors[1], true], [' · ', MUTED], [PACE_CALL_WORDS[p.paceCall], paceCallColor(p, colors), true]]
     : [['Burn Rate after 1 h', MUTED]]
   const bottomTip = p
-    ? `${name} · ${rate(p.rate)}${p.unit} · ${CALL_WORDS[p.call]}: ${p.why}`
+    ? `${name} · ${rate(p.rate)}${p.unit} · ${PACE_CALL_WORDS[p.paceCall]}, ${PACE_CALL_HINTS[p.paceCall]}: ${p.why}`
     : `${name} · resets in ${until(resetsAt - scene.now)} · Burn Rate after 1 h of Active Use`
   return { id, s, top, bottom, tip: half(scene, id).tip, pace: p, bottomTip, isNudgeBooked }
 }
@@ -100,13 +101,13 @@ function columnSvg(x: number, w: number, lw: number, c: Column, now: number): st
 }
 
 function bandSvg(W: number, cols: [Column, Column], now: number): string {
-  const half = (W - COL_GAP) / 2
+  const colW = (W - COL_GAP) / 2
   // One label width for both columns, so the four bars line up.
   const lw = Math.ceil(Math.max(...cols.flatMap(c => [width(c.top), width(c.bottom)]))) + 10
   const H2 = ROW * 2
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H2}" viewBox="0 0 ${W} ${H2}">` +
     `<defs>${gradient('b5', WINDOWS.five_hour.colors)}${gradient('b7', WINDOWS.seven_day.colors)}</defs>` +
-    columnSvg(0, half, lw, cols[0], now) + columnSvg(half + COL_GAP, half, lw, cols[1], now) + `</svg>`
+    columnSvg(0, colW, lw, cols[0], now) + columnSvg(colW + COL_GAP, colW, lw, cols[1], now) + `</svg>`
 }
 
 /** The terminal's line for one window. */

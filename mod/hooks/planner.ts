@@ -6,6 +6,7 @@ import { modelWindows, type Log, type Reading } from './log'
 import { modelLine } from './models'
 import { isQuiet, quietStart, type Settings } from './settings'
 import { standing } from './standing'
+import { WINDOWS, type MainWindow } from './windows'
 import { H, MIN, hhmm, hours, untilShort, weekdayTime } from './time'
 
 /** Two Nudges due this close together go out as one. */
@@ -15,10 +16,8 @@ const WEEKLY_FLOOR = 10
 /** A weekly Nudge moved out of Quiet Hours goes this long before they start. */
 const BEFORE_QUIET = 5 * MIN
 
-export type MainWindow = 'five_hour' | 'seven_day'
 export type Lead = '1h' | '24h' | '3h'
 const LEAD_MS: Record<Lead, number> = { '1h': H, '24h': 24 * H, '3h': 3 * H }
-const NAMES: Record<MainWindow, string> = { five_hour: '5-hour', seven_day: 'Weekly' }
 
 /** One window's part of a Nudge. */
 export type Part = { window: MainWindow; lead: Lead; reading: Reading }
@@ -45,7 +44,7 @@ const keyOf = (p: Part) =>
 const CLOSER = "Use it before it's gone."
 const BIGGER = 'Try a bigger model.'
 const head = (p: Part, at: number) =>
-  `${NAMES[p.window]}: ${Math.round(p.reading.left)}% left as of ${hhmm(p.reading.at)}, resets in ${untilShort(p.reading.resetsAt - at)}`
+  `${WINDOWS[p.window].name}: ${Math.round(p.reading.left)}% left as of ${hhmm(p.reading.at)}, resets in ${untilShort(p.reading.resetsAt - at)}`
 
 /**
  * The Pace Call at the Nudge: the Reading's Unused Allowance, the horizon
@@ -74,12 +73,12 @@ function models(log: Log, week: Reading, now: number): Pick<Planned, 'models' | 
 function single(input: PlanInput, a: Activity | undefined, part: Part, at: number): Planned {
   const p = paceAt(a, part, at)
   let closer = CLOSER
-  if (p?.call === 'more') closer = `${part.window === 'five_hour' ? 'Even nonstop' : 'At your usual pace'}, ~${p.unused}% would go unused.`
-  else if (p?.call === 'track') closer = `~${hours(p.needH)} h of use spends it.`
+  if (p?.paceCall === 'more') closer = `${part.window === 'five_hour' ? 'Even nonstop' : 'At your usual pace'}, ~${p.unused}% would go unused.`
+  else if (p?.paceCall === 'track') closer = `~${hours(p.needH)} h of use spends it.`
   const m = part.window === 'seven_day' ? models(input.log, part.reading, input.now) : { models: [], notWith: [] }
   // Model lines go last, so a truncated notification loses them first; only the advice follows.
   const lines = [`${head(part, at)}. ${closer}`, ...m.models]
-  if (p?.call === 'more') {
+  if (p?.paceCall === 'more') {
     if (m.models.length) lines.push(BIGGER)
     else lines[0] += ` ${BIGGER}`
   }
@@ -92,15 +91,15 @@ function merged(input: PlanInput, a: Activity | undefined, five: Candidate, week
   const paces = [five, week].map(c => paceAt(a, c.part, at))
   const lines = [five, week].map((c, i) => {
     const p = paces[i]
-    const why = p?.call === 'more'
+    const why = p?.paceCall === 'more'
       ? ` · ~${p.unused}% unused ${c.part.window === 'five_hour' ? 'even nonstop' : 'at your usual pace'}`
-      : p?.call === 'track' ? ` · ~${hours(p.needH)} h of use spends it` : ''
+      : p?.paceCall === 'track' ? ` · ~${hours(p.needH)} h of use spends it` : ''
     return head(c.part, at) + why
   })
   const m = models(input.log, week.part.reading, input.now)
   lines.push(...m.models)
-  if (paces.some(p => p?.call === 'more')) lines.push(BIGGER)
-  else if (!paces.some(p => p?.call === 'track')) lines.push(CLOSER)
+  if (paces.some(p => p?.paceCall === 'more')) lines.push(BIGGER)
+  else if (!paces.some(p => p?.paceCall === 'track')) lines.push(CLOSER)
   return { key: `${keyOf(five.part)}+${keyOf(week.part)}`, at, text: lines.join('\n'), parts: [five.part, week.part], ...m }
 }
 
@@ -114,7 +113,7 @@ export function plan(input: PlanInput): Plan {
   const week: Candidate[] = []
 
   for (const window of ['five_hour', 'seven_day'] as const) {
-    const name = NAMES[window]
+    const name = WINDOWS[window].name
     const s = standing(log, window, now)
     const threshold = window === 'five_hour' ? settings.fiveHourThreshold : settings.weeklyThreshold
     if (s.state === 'missing') {
@@ -146,15 +145,21 @@ export function plan(input: PlanInput): Plan {
       else five.push({ part: { window, lead: '1h', reading: s.reading }, at })
       continue
     }
+    let quietReason: string | undefined
     for (const lead of ['24h', '3h'] as const) {
-      let at = resetsAt - LEAD_MS[lead]
+      const due = resetsAt - LEAD_MS[lead]
+      let at = due
       // Moved earlier, not dropped: a weekly loss is worth knowing before you sleep.
-      if (settings.quietHours !== 'off' && isQuiet(at, settings.quietHours)) at = quietStart(at, settings.quietHours) - BEFORE_QUIET
+      if (settings.quietHours !== 'off' && isQuiet(due, settings.quietHours)) {
+        const began = quietStart(due, settings.quietHours)
+        at = began - BEFORE_QUIET
+        if (at <= now && due > now) quietReason = `${name}: due ${hhmm(due)}, inside Quiet Hours that began at ${hhmm(began)}`
+      }
       if (at > now) week.push({ part: { window, lead, reading: s.reading }, at })
     }
     // Both moved to the same evening: the later lead says it all.
     if (week.length === 2 && week[1]!.at - week[0]!.at <= MERGE_WITHIN) week.shift()
-    if (!week.length) reasons[window] = `${name}: resets in ${untilShort(resetsAt - now)}, inside the 3 h lead time`
+    if (!week.length) reasons[window] = quietReason ?? `${name}: resets in ${untilShort(resetsAt - now)}, inside the 3 h lead time`
   }
 
   const a = activity(log, input.slots, now)

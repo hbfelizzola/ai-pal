@@ -100,3 +100,17 @@ test('Active Use is pooled across sessions through the store, and kept 7 days', 
   expect(w.store.get('active')).toEqual([...slots(NOW - H, 6).reverse(), ...slots(NOW, 6).reverse()])
   expect(await pane($, w, 'terminal')).not.toContain('Burn Rate after 1 h')
 })
+
+test('a Reset that wobbles across a minute boundary between sources is still one window', async ($, on) => {
+  // The endpoint read the Reset as 16:59:20 (snapped to 16:59), the session as 16:59:31 (17:00).
+  const reset = NOW + 3 * H - MIN
+  const w = engine(on, {
+    store: {
+      active: slots(NOW, 12),
+      'readings:five_hour': [{ at: NOW - H, source: 'api', left: 90, resetsAt: reset }],
+    },
+  })
+  await start($, w)
+  await measure($, limit('five_hour', 28, reset + 31_000))
+  expect(await pane($, w, 'terminal')).toContain('18%/h')
+})

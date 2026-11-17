@@ -5,6 +5,7 @@ import type { Booked, Change } from './booker'
 import type { Plan } from './planner'
 import { ACCEPTED, DEFAULTS, NAMES, parse, resetOne, spell, type Name, type Settings } from './settings'
 import { weekdayTime } from './time'
+import { WINDOWS } from './windows'
 
 export const USAGE = 'Usage: /ai-pal, /ai-pal set <setting> <value>, /ai-pal reset [setting]'
 
@@ -38,11 +39,10 @@ export function request(args: string, current: Settings): Request {
 }
 
 const LEADS: Record<string, string> = { '1h': '1 h before', '24h': '24 h before', '3h': '3 h before' }
-const WINDOW_NAMES: Record<string, string> = { five_hour: '5-hour', seven_day: 'Weekly' }
 
 /** `5-hour, 1 h before · Tue 15:12`; a merged Nudge names both parts. */
 export const describe = (b: Booked) =>
-  `${b.windows.map((w, i) => `${WINDOW_NAMES[w]}, ${LEADS[b.leads[i]!] ?? b.leads[i]}`).join(' + ')} · ${weekdayTime(b.at)}`
+  `${b.windows.map((w, i) => `${WINDOWS[w].name}, ${LEADS[b.leads[i]!] ?? b.leads[i]}`).join(' + ')} · ${weekdayTime(b.at)}`
 
 export function changed(change: Change): string {
   const lines = [...change.booked.map(b => `Booked: ${describe(b)}`), ...change.cancelled.map(b => `Cancelled: ${describe(b)}`)]

@@ -46,7 +46,7 @@ test('four bars: per window, the Unused Allowance over a speed bar with the rate
   // The labels: `5-hour 48% · 2h 0m` with the % in the window's colour.
   expect(desk).toContain('5-hour </tspan><tspan fill="#E0703F" font-weight="650">48%</tspan><tspan fill="#8E8E8E"> · 2h 0m')
   // The why on hover.
-  expect(desk).toContain('~12% would go unused even nonstop · resets in 2h 0m')
+  expect(desk).toContain('Use more, or a bigger model: ~12% would go unused even nonstop · resets in 2h 0m')
   expect(desk).toContain('spends it in')
   // Bars 10px tall: two tracks and two speed bars at least.
   expect((desk.match(/height="10"/g) ?? []).length).toBeGreaterThanOrEqual(4)

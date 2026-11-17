@@ -114,3 +114,20 @@ test('settings dropped after a month without use are reported once', async ($, o
   expect(first).toContain('5h-threshold: 40% (default 40%)')
   expect(await aiPal($)).not.toContain('went unused')
 })
+
+test('in a terminal session, a change says the desktop app\'s sessions apply it rather than claiming nothing changed', async ($, on) => {
+  const w = engine(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const reply = await aiPal($, 'set nudges off')
+  expect(reply).toContain('nudges is now off (default on).')
+  expect(reply).toContain('This terminal session books and cancels no Nudges; sessions in the Claude desktop app apply the change at their next Reading.')
+  expect(reply).not.toContain('No Nudge changed.')
+  void w
+})
+
+test('a weekly Nudge whose move out of Quiet Hours is already past gets that reason', async ($, on) => {
+  const w = engine(on, { now: at(0, 23, 30) })
+  await start($, w)
+  await measure($, limit('seven_day', 50, at(1, 5))) // 3 h before is 02:00, inside Quiet Hours that began at 23:00
+  expect(await aiPal($)).toContain('Weekly: due 02:00, inside Quiet Hours that began at 23:00')
+})

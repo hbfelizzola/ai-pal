@@ -2,7 +2,8 @@
 // are recorded in $.store, so every session (and `/ai-pal`) sees the same
 // list, and each is keyed so a rebook replaces rather than stacks.
 import type { EngineInterface } from 'claude-code'
-import type { MainWindow, Planned } from './planner'
+import type { Planned } from './planner'
+import type { MainWindow } from './windows'
 
 export type Booked = {
   key: string

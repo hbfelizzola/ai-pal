@@ -29,6 +29,8 @@ const poller = newPoller()
  * `at` and shows a notification at once, so only a host books them.
  */
 let canBook = true
+const TERMINAL_NOTE = 'This terminal session books no Nudges (a terminal would show them at once); sessions in the Claude desktop app do.'
+const TERMINAL_CHANGE = 'This terminal session books and cancels no Nudges; sessions in the Claude desktop app apply the change at their next Reading.'
 
 async function record($: EngineInterface, readings: [WindowId, Reading][]) {
   if (!readings.length) return
@@ -74,7 +76,8 @@ async function answer($: EngineInterface, args: string): Promise<string> {
   if (req.kind === 'refuse') return req.text
   if (req.kind === 'change') {
     await saveSettings($, req.settings)
-    return `${req.said}\n${changed(await reevaluate($))}`
+    const change = await reevaluate($)
+    return `${req.said}\n${canBook ? changed(change) : TERMINAL_CHANGE}`
   }
   await reevaluate($)
   const notes: string[] = []
@@ -83,7 +86,7 @@ async function answer($: EngineInterface, args: string): Promise<string> {
     notes.push(notice)
     await $.store.delete('notice')
   }
-  if (!canBook) notes.push('This terminal session books no Nudges (a terminal would show them at once); sessions in the Claude desktop app do.')
+  if (!canBook) notes.push(TERMINAL_NOTE)
   const now = await $.clock.now()
   const settings = await loadSettings($)
   const p = plan({ log: await loadLog($), now, settings, slots: await loadSlots($) })
