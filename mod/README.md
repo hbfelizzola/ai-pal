@@ -5,6 +5,8 @@ plan's Unused Allowance per Usage Window in a docked Pane and in a band above
 the prompt, and books Nudges before a Reset while you're away. `/ai-pal`
 shows and changes its settings.
 
+See the [repository README](../README.md) for pictures, install and settings.
+
 Needs Claude Code 2.1.325 or newer (the build that has `$.ui.cancelNotify`).
 
 Load it for a session:

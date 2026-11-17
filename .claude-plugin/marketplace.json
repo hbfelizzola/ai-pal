@@ -1,0 +1,14 @@
+{
+  "name": "ai-pal",
+  "owner": {
+    "name": "Humberto Bernardes Felizzola"
+  },
+  "description": "ai-pal, a Claude Code mod for your Claude plan's usage",
+  "plugins": [
+    {
+      "name": "ai-pal",
+      "source": "./mod",
+      "description": "Shows your Claude plan's Unused Allowance and Nudges you before a Reset loses it"
+    }
+  ]
+}
