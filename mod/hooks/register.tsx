@@ -39,7 +39,7 @@ async function record($: EngineInterface, readings: [WindowId, Reading][]) {
 async function reevaluate($: EngineInterface) {
   const now = await $.clock.now()
   const change = canBook
-    ? await reconcile($, plan({ log: await loadLog($), now, settings: await loadSettings($) }).nudges, now)
+    ? await reconcile($, plan({ log: await loadLog($), now, settings: await loadSettings($), slots: await loadSlots($) }).nudges, now)
     : { booked: [], cancelled: [] }
   await update($, rev, n => n + 1)
   return change

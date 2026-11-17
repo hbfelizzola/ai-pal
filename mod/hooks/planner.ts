@@ -1,10 +1,11 @@
 // The Nudge planner: which Nudges should be booked right now, given the
 // newest Readings, the settings and the clock, and for each window with none,
 // why. Pure; the booker makes it so.
+import { activity, pace, type Activity, type Pace } from './figures'
 import type { Log, Reading } from './log'
 import { isQuiet, quietStart, type Settings } from './settings'
 import { standing } from './standing'
-import { H, MIN, hhmm, untilShort } from './time'
+import { H, MIN, hhmm, hours, untilShort } from './time'
 
 /** Two Nudges due this close together go out as one. */
 const MERGE_WITHIN = 30 * MIN
@@ -30,24 +31,50 @@ export type Planned = {
 }
 
 export type Plan = { nudges: Planned[]; reasons: Partial<Record<MainWindow, string>> }
-export type PlanInput = { log: Log; now: number; settings: Settings }
+export type PlanInput = { log: Log; now: number; settings: Settings; slots: readonly number[] }
 
 /** `5h-202611171612-1h`: window, Reset (UTC, to the minute) and lead time; a host takes keys of up to 64 characters. */
 const keyOf = (p: Part) =>
   `${p.window === 'five_hour' ? '5h' : 'wk'}-${new Date(p.reading.resetsAt).toISOString().replace(/\D/g, '').slice(0, 12)}-${p.lead}`
 
 const CLOSER = "Use it before it's gone."
+const BIGGER = 'Try a bigger model.'
 const head = (p: Part, at: number) =>
   `${NAMES[p.window]}: ${Math.round(p.reading.left)}% left as of ${hhmm(p.reading.at)}, resets in ${untilShort(p.reading.resetsAt - at)}`
 
-function single(input: PlanInput, part: Part, at: number): Planned {
-  return { key: keyOf(part), at, text: `${head(part, at)}. ${CLOSER}`, parts: [part] }
+/**
+ * The Pace Call at the Nudge: the Reading's Unused Allowance, the horizon
+ * from delivery to the Reset, the current Burn Rate. Computed at booking and
+ * refreshed by each rebook; it never decides whether a Nudge fires.
+ */
+const paceAt = (a: Activity | undefined, p: Part, at: number): Pace | undefined =>
+  a && pace(p.window, p.reading.left, p.reading.resetsAt - at, a)
+
+function single(a: Activity | undefined, part: Part, at: number): Planned {
+  const p = paceAt(a, part, at)
+  let closer = CLOSER
+  if (p?.call === 'more') {
+    const how = part.window === 'five_hour' ? 'Even nonstop' : 'At your usual pace'
+    closer = `${how}, ~${p.unused}% would go unused. ${BIGGER}`
+  } else if (p?.call === 'track') {
+    closer = `~${hours(p.needH)} h of use spends it.`
+  }
+  return { key: keyOf(part), at, text: `${head(part, at)}. ${closer}`, parts: [part] }
 }
 
 /** A 5-hour and a weekly Nudge as one notification, at the earlier of the two. */
-function merged(input: PlanInput, five: Candidate, week: Candidate): Planned {
+function merged(a: Activity | undefined, five: Candidate, week: Candidate): Planned {
   const at = Math.min(five.at, week.at)
-  const lines = [head(five.part, at), head(week.part, at), CLOSER]
+  const paces = [five, week].map(c => paceAt(a, c.part, at))
+  const lines = [five, week].map((c, i) => {
+    const p = paces[i]
+    const why = p?.call === 'more'
+      ? ` · ~${p.unused}% unused ${c.part.window === 'five_hour' ? 'even nonstop' : 'at your usual pace'}`
+      : p?.call === 'track' ? ` · ~${hours(p.needH)} h of use spends it` : ''
+    return head(c.part, at) + why
+  })
+  if (paces.some(p => p?.call === 'more')) lines.push(BIGGER)
+  else if (!paces.some(p => p?.call === 'track')) lines.push(CLOSER)
   return { key: `${keyOf(five.part)}+${keyOf(week.part)}`, at, text: lines.join('\n'), parts: [five.part, week.part] }
 }
 
@@ -104,10 +131,11 @@ export function plan(input: PlanInput): Plan {
     if (!week.length) reasons[window] = `${name}: resets in ${untilShort(resetsAt - now)}, inside the 3 h lead time`
   }
 
+  const a = activity(log, input.slots, now)
   const [f] = five
   const partner = f && week.filter(c => Math.abs(c.at - f.at) <= MERGE_WITHIN).sort((a, b) => Math.abs(a.at - f.at) - Math.abs(b.at - f.at))[0]
-  if (f && partner) nudges.push(merged(input, f, partner))
-  else if (f) nudges.push(single(input, f.part, f.at))
-  for (const c of week) if (c !== partner) nudges.push(single(input, c.part, c.at))
+  if (f && partner) nudges.push(merged(a, f, partner))
+  else if (f) nudges.push(single(a, f.part, f.at))
+  for (const c of week) if (c !== partner) nudges.push(single(a, c.part, c.at))
   return { nudges: nudges.sort((a, b) => a.at - b.at), reasons }
 }
