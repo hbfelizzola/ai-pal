@@ -59,8 +59,14 @@ export function listing(settings: Settings, booked: readonly Booked[], plan: Pla
     out.push(`  ${describe(b)}`)
     // Model lines and the model windows left out sit one step further in.
     const models = new Set(b.models ?? [])
-    for (const line of b.text.split('\n')) out.push(`${models.has(line) ? '      ' : '    '}${line}`)
-    for (const line of b.notWith ?? []) out.push(`      ${line}`)
+    const lines = b.text.split('\n')
+    const last = lines.reduce((at, line, i) => (models.has(line) ? i : at), -1)
+    // The left-out windows follow the model lines, or the first line when there are none.
+    const after = last >= 0 ? last : 0
+    lines.forEach((line, i) => {
+      out.push(`${models.has(line) ? '      ' : '    '}${line}`)
+      if (i === after) for (const reason of b.notWith ?? []) out.push(`      ${reason}`)
+    })
   }
   const reasons = Object.values(plan.reasons)
   if (reasons.length) {
