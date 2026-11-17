@@ -72,3 +72,23 @@ export const newest = (log: Log, id: WindowId): Reading | undefined => log.get(i
 
 export const modelWindows = (log: Log): string[] =>
   [...log.keys()].filter(id => id.startsWith('model:')).map(id => id.slice('model:'.length)).sort()
+
+// Active Use: the 5-minute slots in which Claude ran a turn in any session,
+// pooled the same way (a union, re-merged with this session's own).
+const ACTIVE = 'active'
+const SLOT_MS = 5 * 60_000
+const mySlots = new Set<number>()
+
+const asSlots = (v: unknown): number[] => (Array.isArray(v) ? v.filter((s): s is number => Number.isInteger(s)) : [])
+
+export async function addSlots($: EngineInterface, slots: readonly number[], now: number) {
+  const from = Math.floor((now - 7 * DAY) / SLOT_MS)
+  for (const s of slots) mySlots.add(s)
+  for (const s of mySlots) if (s * SLOT_MS < now - H) mySlots.delete(s)
+  const all = new Set([...asSlots(await $.store.get(ACTIVE)), ...slots, ...mySlots])
+  await $.store.set(ACTIVE, [...all].filter(s => s >= from).sort((a, b) => a - b))
+}
+
+export async function loadSlots($: EngineInterface): Promise<number[]> {
+  return asSlots(await $.store.get(ACTIVE))
+}

@@ -5,9 +5,11 @@ import type { EndpointState } from '../types'
 import type { Log, WindowId } from './log'
 import { AMBER, COOL, WARM, type Pair } from './look'
 import { modelLines } from './models'
+import { activity, CALL_HINTS, CALL_WORDS, pace, type Pace } from './figures'
+import { CALL_COLOR, gaugeSvg } from './gauge'
 import { ringSvg, type Half } from './ring'
 import { standing } from './standing'
-import { ago, hhmm, resetLabel, until } from './time'
+import { ago, hhmm, rate, resetLabel, until } from './time'
 
 export const WINDOWS = {
   five_hour: { name: '5-hour', colors: WARM },
@@ -16,7 +18,15 @@ export const WINDOWS = {
 export type MainWindow = keyof typeof WINDOWS
 
 /** Everything one drawing reads. */
-export type Scene = { log: Log; now: number; endpoint: EndpointState }
+export type Scene = { log: Log; now: number; endpoint: EndpointState; slots: readonly number[] }
+
+/** A main window's Pace Call, when there is a Burn Rate and a current figure to judge. */
+export function paceOf(scene: Scene, id: MainWindow): Pace | undefined {
+  const a = activity(scene.log, scene.slots, scene.now)
+  const s = standing(scene.log, id, scene.now)
+  if (!a || s.state !== 'read') return undefined
+  return pace(id, s.reading.left, s.reading.resetsAt - scene.now, a)
+}
 
 export const pct = (n: number) => `${Math.round(n)}%`
 const SOURCE_NAMES = { api: 'usage API', session: 'session data' } as const
@@ -93,9 +103,34 @@ export function drawPane($: EngineInterface, e: RenderInput<'Pane'>, scene: Scen
           {models.map(m => <Text size="footnote" dimColor={m.isStale}>{m.text}</Text>)}
         </Box>
       )}
+      {speedometer($, e, scene)}
       <Text size="footnote" color={foot.isAmber ? AMBER : undefined} dimColor={!foot.isAmber}>{foot.text}</Text>
     </Box>
   )
+}
+
+const NO_BURN = ['Burn Rate after', '1 h of Active Use']
+
+/** The 5-hour Burn Rate speedometer. */
+function speedometer($: EngineInterface, e: RenderInput<'Pane'>, scene: Scene) {
+  const { Box, Text } = $.ui.resolve(e)
+  const p = paceOf(scene, 'five_hour')
+  const hasBurn = activity(scene.log, scene.slots, scene.now) !== undefined
+  const note = hasBurn ? ['Waiting for a', '5-hour Reading'] : NO_BURN
+  if (e.surface === 'terminal') {
+    if (!p) return <Text dimColor>{note.join(' ')}</Text>
+    return (
+      <Box flexDirection="column">
+        <Text>
+          Burn Rate <Text bold>{`${rate(p.rate)}${p.unit}`}</Text> · <Text color={CALL_COLOR(p, WARM)} bold>{CALL_WORDS[p.call]}</Text> <Text dimColor>{CALL_HINTS[p.call]}</Text>
+        </Text>
+        <Text dimColor>{p.why}</Text>
+      </Box>
+    )
+  }
+  const [source, height] = gaugeSvg(200, '5-hour', WARM, p, note)
+  const alt = p ? `5-hour Burn Rate ${rate(p.rate)}${p.unit}: ${CALL_WORDS[p.call]}, ${CALL_HINTS[p.call]}. ${p.why}` : `5-hour: ${note.join(' ')}`
+  return svg($, e, source, alt, 200, height)
 }
 
 /** An Svg where the surface draws one; the terminal gets the same figures as text instead. */

@@ -6,7 +6,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 import type { EndpointState } from '../types'
-import { addReadings, loadLog, type Reading, type WindowId } from './log'
+import { slotsOf } from './figures'
+import { addReadings, addSlots, loadLog, loadSlots, type Reading, type WindowId } from './log'
 import { ENDPOINT, ENDPOINT_HEADERS, newPoller, onFailure, onReply, passiveReadings, type PollOutcome } from './reader'
 import { drawPane } from './readout'
 import { MIN } from './time'
@@ -60,8 +61,15 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('turn.complete', async ($, e, next) => {
+    const now = await $.clock.now()
+    await addSlots($, slotsOf(now, e.durationMs), now)
+    await update($, rev, n => n + 1)
+    return next(e)
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     await read($, rev)
-    return drawPane($, e, { log: await loadLog($), now: await $.clock.now(), endpoint: await read($, endpoint) })
+    return drawPane($, e, { log: await loadLog($), now: await $.clock.now(), endpoint: await read($, endpoint), slots: await loadSlots($) })
   })
 }
