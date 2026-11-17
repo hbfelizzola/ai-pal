@@ -91,3 +91,7 @@ claude --plugin-dir mod
 ```
 
 [`CONTEXT.md`](CONTEXT.md) defines the vocabulary: Usage Window, Reset, Unused Allowance, Reading, Nudge, Active Use, Burn Rate and Pace Call. The v1 spec is [#18](https://github.com/hbfelizzola/ai-pal/issues/18).
+
+## License
+
+[MIT](LICENSE)
