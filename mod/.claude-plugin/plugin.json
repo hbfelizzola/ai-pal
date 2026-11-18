@@ -1,11 +1,17 @@
 {
   "name": "ai-pal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Shows your Claude plan's Unused Allowance and Nudges you before a Reset loses it",
   "author": {
     "name": "Humberto Bernardes Felizzola"
   },
   "homepage": "https://github.com/hbfelizzola/ai-pal",
+  "repository": "https://github.com/hbfelizzola/ai-pal",
   "license": "MIT",
+  "keywords": ["usage", "rate limits", "notifications", "mod"],
+  "icon": "./icon.png",
+  "documentationUrl": "https://github.com/hbfelizzola/ai-pal#readme",
+  "supportUrl": "https://github.com/hbfelizzola/ai-pal/issues",
+  "privacyPolicyUrl": "https://github.com/hbfelizzola/ai-pal/blob/main/PRIVACY.md",
   "types": "./types/index.d.ts"
 }

@@ -4,7 +4,7 @@
 
 A Claude plan meters usage in windows: a 5-hour window, a weekly window, and sometimes a weekly window per model. Whatever you haven't used when a window resets is lost. Claude's own meter warns you near a cap, but nothing tells you that allowance you've already paid for is about to go unused. ai-pal does.
 
-<p align="center"><img src="docs/images/pane.png" width="320" alt="The ai-pal Pane: a split ring with 62% of the 5-hour window and 47% of the weekly window left, a row for the Fable model, and a speedometer reading 18%/h · Use more"></p>
+<p align="center"><img src="mod/images/pane.png" width="320" alt="The ai-pal Pane: a split ring with 62% of the 5-hour window and 47% of the weekly window left, a row for the Fable model, and a speedometer reading 18%/h · Use more"></p>
 
 ## What it does
 
@@ -16,11 +16,11 @@ A Claude plan meters usage in windows: a 5-hour window, a weekly window, and som
 - **On track**: your pace spends it by the Reset.
 - **Ease off**, or a lighter model: you'd run out well before the Reset.
 
-<p align="center"><img src="docs/images/speedometer.png" width="248" alt="The 5-hour Burn Rate speedometer at 18%/h, in the amber Use more zone below 21%/h"></p>
+<p align="center"><img src="mod/images/speedometer.png" width="248" alt="The 5-hour Burn Rate speedometer at 18%/h, in the amber Use more zone below 21%/h"></p>
 
 **It keeps the key figures where you type.** A band above the prompt shows each window's Unused Allowance over a speed bar with your rate and the Pace Call. Hover a bar for the reason behind the call.
 
-<p align="center"><img src="docs/images/band.png" alt="The band above the prompt: 5-hour 62% · 3h 0m with 18%/h · Use more, and Weekly 47% · Sun 01:00 with 12%/day · On track"></p>
+<p align="center"><img src="mod/images/band.png" alt="The band above the prompt: 5-hour 62% · 3h 0m with 18%/h · Use more, and Weekly 47% · Sun 01:00 with 12%/day · On track"></p>
 
 **It nudges you after you've left.** A native notification arrives shortly before a Reset when a window still has enough left. It goes 1 hour before a 5-hour Reset when 40% or more is left, and 24 hours and 3 hours before a weekly Reset when 30% or more is left. It's held while you're in front of a session, so it only reaches you once you've stepped away:
 
@@ -68,7 +68,7 @@ The Pane opens by itself when a session starts. The figures fill in after your f
 
 ai-pal takes the usage figures your session reports after every response. It also asks your plan's usage endpoint at `api.anthropic.com` every 5 minutes, signed in as your session (the mod never sees your credential). Only the endpoint reports model-specific weekly windows. ai-pal backs off when the endpoint is busy, and falls back to the session's own figures when the endpoint refuses or changes shape.
 
-Everything ai-pal records stays on your machine, in its own Claude Code data: your Readings (7 days for the 5-hour window, 4 weeks for weekly ones), your Active Use and your settings. Every open session shares the same figures.
+Everything ai-pal records stays on your machine, in its own Claude Code data: your Readings (7 days for the 5-hour window, 4 weeks for weekly ones), your Active Use and your settings. Every open session shares the same figures. Nothing goes to the author or any third party; the [privacy policy](PRIVACY.md) has the details.
 
 ## Limits
 
