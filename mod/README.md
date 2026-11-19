@@ -8,7 +8,7 @@ A Claude plan meters usage in windows: a 5-hour window, a weekly window, and som
 
 ## What it does
 
-**It shows where you stand.** A Pane docked beside your session holds a split ring with the share of each window you have left and the time to its Reset. The 5-hour window gets the larger arc, across the top. Under the ring are a row per model-specific window and a speedometer for your 5-hour Burn Rate.
+**It shows where you stand.** A Pane docked beside your session holds four car-style dials in a column, a fuel gauge and a speedometer for each window. The fuel gauge shows the share of the window you have left from E to F, the time to its Reset draining on the arc below, and a clock counting down to the second. The speedometer shows that window's Burn Rate. `/ai-pal set gauges needle` swaps the rings for needle dials, and `ring` brings back a single split ring with the 5-hour speedometer. Under the dials is a row per model-specific window.
 
 **It judges your pace.** ai-pal counts your Active Use (5-minute slots in which Claude ran a turn) and how fast you spend each window during it, then makes a Pace Call per window:
 
@@ -49,6 +49,7 @@ The Pane opens by itself when a session starts, and the figures fill in after yo
 | `weekly-threshold` | a whole % from 5 to 100, or `off` | `30%` |
 | `quiet-hours` | `HH:MM-HH:MM` in 24-hour local time, or `off` | `23:00-08:00` |
 | `band` | `on` or `off` | `on` |
+| `gauges` | `fuel` (fuel-gauge rings), `needle` (needle dials) or `ring` (one split ring) | `fuel` |
 
 ## What it reads, sends and stores
 

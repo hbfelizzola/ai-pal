@@ -68,7 +68,7 @@ test('bad input changes nothing and names the accepted values', async ($, on) =>
   await start($, w)
   expect(await aiPal($, 'set 5h-threshold 3')).toContain('5h-threshold takes a whole % from 5 to 100 (`40` or `40%`), or `off`. Nothing changed.')
   expect(await aiPal($, 'set quiet-hours 08:00-08:00')).toContain('Nothing changed.')
-  expect(await aiPal($, 'set volume 11')).toContain('Settings: nudges, 5h-threshold, weekly-threshold, quiet-hours, band. Nothing changed.')
+  expect(await aiPal($, 'set volume 11')).toContain('Settings: nudges, 5h-threshold, weekly-threshold, quiet-hours, band, gauges. Nothing changed.')
   expect(await aiPal($, 'frobnicate')).toContain('Usage: /ai-pal, /ai-pal set <setting> <value>, /ai-pal reset [setting]')
   expect(w.store.get('settings')).toBeUndefined()
 })

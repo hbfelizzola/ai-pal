@@ -12,8 +12,10 @@ export const MUTED = '#8E8E8E'
 /** A booked Nudge's dot, Use more, and figures that may be wrong. */
 export const AMBER = '#E5A50A'
 export const NUDGE = AMBER
-/** Ease off. */
+/** Muted text for a window with no current figure. */
 export const GREY = '#A7A7A7'
+/** Ease off: the pace runs out well before the Reset. */
+export const EASE = '#E5484D'
 
 export const font = 'font-family="-apple-system,system-ui,sans-serif"'
 

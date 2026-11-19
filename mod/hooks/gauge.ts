@@ -1,12 +1,12 @@
 // The 5-hour Burn Rate speedometer: a 240° dial with three zones (amber =
-// use more, warm = on track, grey = ease off), a white needle at the rate,
+// use more, warm = on track, red = ease off), a white needle at the rate,
 // and the rate and Pace Call in the centre.
 import { PACE_CALL_HINTS, PACE_CALL_WORDS, type Pace } from './figures'
-import { AMBER, GREY, MUTED, TRACK, esc, font, type Pair } from './look'
+import { AMBER, EASE, MUTED, TRACK, esc, font, type Pair } from './look'
 import { rate as rateText } from './time'
 
 const SWEEP = 240
-export const paceCallColor = (p: Pace, colors: Pair) => (p.paceCall === 'more' ? AMBER : p.paceCall === 'track' ? colors[1] : GREY)
+export const paceCallColor = (p: Pace, colors: Pair) => (p.paceCall === 'more' ? AMBER : p.paceCall === 'track' ? colors[1] : EASE)
 
 export const niceMax = (v: number) => {
   const step = v <= 10 ? 2 : v <= 50 ? 10 : 20
@@ -67,7 +67,7 @@ export function gaugeSvg(size: number, name: string, colors: Pair, pace: Pace | 
       `<rect width="${size}" height="${height}" fill="transparent"><title>${esc(why)}</title></rect>` +
       zone(0, pace.r1, AMBER, `Below ${k1}${unit}: some of the ${Math.round(pace.left)}% left goes unused`, 0.92) +
       zone(pace.r1, pace.r2, colors[1], `${k1}–${k2}${unit}: spends it in half to all of the Active Use you can expect before the Reset`, 0.92) +
-      zone(pace.r2, max, TRACK, `Above ${k2}${unit}: runs out with time to spare`) +
+      zone(pace.r2, max, EASE, `Above ${k2}${unit}: runs out with time to spare`, 0.92) +
       edge(pace.r1, k1) + edge(pace.r2, k2) +
       `<g><title>${esc(why)}</title>${line('rgba(0,0,0,0.6)', 6)}${line('#FFFFFF', 3.5)}` +
       `<circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="${(3.5 * k).toFixed(1)}" fill="#FFFFFF" stroke="rgba(0,0,0,0.6)" stroke-width="1"/></g>` +

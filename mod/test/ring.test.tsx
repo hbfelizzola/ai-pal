@@ -30,8 +30,8 @@ test('after a response, the ring shows each window\'s % left and time to Reset',
   }
 })
 
-test('the desktop ring is a 210px split ring in the window colours with a tooltip per arc', async ($, on) => {
-  const w = engine(on)
+test('with gauges set to ring, the desktop ring is a 210px split ring in the window colours with a tooltip per arc', async ($, on) => {
+  const w = engine(on, { store: { settings: { gauges: 'ring' } } })
   await start($)
   await $.session.measure({
     context: {} as never, changed: ['rateLimits'],

@@ -2,12 +2,16 @@
 import type { EngineInterface } from 'claude-code'
 
 export type QuietHours = { start: number; end: number } // minutes into the local day
+/** The Pane's dials: fuel-gauge rings, needle dials, or the one split ring. */
+export const GAUGES = ['fuel', 'needle', 'ring'] as const
+export type Gauges = (typeof GAUGES)[number]
 export type Settings = {
   nudges: boolean
   fiveHourThreshold: number | 'off'
   weeklyThreshold: number | 'off'
   quietHours: QuietHours | 'off'
   band: boolean
+  gauges: Gauges
 }
 
 export const DEFAULTS: Settings = {
@@ -16,10 +20,11 @@ export const DEFAULTS: Settings = {
   weeklyThreshold: 30,
   quietHours: { start: 23 * 60, end: 8 * 60 },
   band: true,
+  gauges: 'fuel',
 }
 
 /** The names `/ai-pal set` takes, each with its parse and its spelling. */
-export const NAMES = ['nudges', '5h-threshold', 'weekly-threshold', 'quiet-hours', 'band'] as const
+export const NAMES = ['nudges', '5h-threshold', 'weekly-threshold', 'quiet-hours', 'band', 'gauges'] as const
 export type Name = (typeof NAMES)[number]
 const FIELD = {
   nudges: 'nudges',
@@ -27,6 +32,7 @@ const FIELD = {
   'weekly-threshold': 'weeklyThreshold',
   'quiet-hours': 'quietHours',
   band: 'band',
+  gauges: 'gauges',
 } as const satisfies Record<Name, keyof Settings>
 
 export const ACCEPTED: Record<Name, string> = {
@@ -35,6 +41,7 @@ export const ACCEPTED: Record<Name, string> = {
   'weekly-threshold': 'a whole % from 5 to 100 (`30` or `30%`), or `off`',
   'quiet-hours': '`HH:MM-HH:MM` in 24-hour local time (it may cross midnight; start and end must differ), or `off`',
   band: '`on` or `off`',
+  gauges: '`fuel`, `needle` or `ring`',
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -43,7 +50,7 @@ const clock = (m: number) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`
 export function spell(name: Name, s: Settings): string {
   const v = s[FIELD[name]]
   if (typeof v === 'boolean') return v ? 'on' : 'off'
-  if (v === 'off') return 'off'
+  if (typeof v === 'string') return v
   if (typeof v === 'number') return `${v}%`
   return `${clock(v.start)}-${clock(v.end)}`
 }
@@ -55,6 +62,7 @@ const percent = (t: string) => {
   const n = m ? Number(m[1]) : NaN
   return n >= 5 && n <= 100 ? n : undefined
 }
+const gauges = (t: string) => GAUGES.find(g => g === t)
 const quiet = (t: string): QuietHours | 'off' | undefined => {
   if (t === 'off') return 'off'
   const m = /^([01]?\d|2[0-3]):([0-5]\d)-([01]?\d|2[0-3]):([0-5]\d)$/.exec(t)
@@ -67,7 +75,7 @@ const quiet = (t: string): QuietHours | 'off' | undefined => {
 /** `value` for `name` as a change to the settings, or undefined when it isn't one of the accepted values. */
 export function parse(name: Name, value: string): Partial<Settings> | undefined {
   const t = value.trim().toLowerCase()
-  const v = name === 'nudges' || name === 'band' ? onOff(t) : name === 'quiet-hours' ? quiet(t) : percent(t)
+  const v = name === 'nudges' || name === 'band' ? onOff(t) : name === 'quiet-hours' ? quiet(t) : name === 'gauges' ? gauges(t) : percent(t)
   return v === undefined ? undefined : { [FIELD[name]]: v }
 }
 

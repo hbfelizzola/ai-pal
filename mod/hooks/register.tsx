@@ -21,6 +21,8 @@ const PANE = 'ai-pal'
 /** Bumped whenever what the readout draws from may have changed. */
 const rev = atom({ plugin: 'ai-pal', key: 'rev' } as const, 0)
 const endpoint = atom({ plugin: 'ai-pal', key: 'endpoint' } as const, { state: 'unknown' } as EndpointState)
+/** Ticks each second while the dials are drawn, for their countdown clocks; only the Pane reads it. */
+const second = atom({ plugin: 'ai-pal', key: 'second' } as const, 0)
 
 /** This session's poller; a reload starts a fresh one from session.start. */
 const poller = newPoller()
@@ -93,6 +95,22 @@ async function answer($: EngineInterface, args: string): Promise<string> {
   return listing(settings, await loadBooked($, now), p, notes)
 }
 
+/** Whether the next second's redraw is already booked. */
+let isTickBooked = false
+
+/**
+ * Books a redraw of the dials at the next whole second. Each drawing books
+ * the next, so the clocks tick while the Pane is drawn and stop when it isn't.
+ */
+function tickSoon($: EngineInterface, now: number) {
+  if (isTickBooked) return
+  isTickBooked = true
+  $.clock.after(1000 - (now % 1000), () => {
+    isTickBooked = false
+    void update($, second, n => n + 1)
+  })
+}
+
 /** What a drawing reads; reading `rev` redraws it on every change. */
 async function scene($: EngineInterface): Promise<Scene> {
   await read($, rev)
@@ -151,7 +169,15 @@ export const register: Register = on => {
 
   on('command.run', { command: 'ai-pal' }, async ($, e) => ({ text: await answer($, e.args) }))
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawPane($, e, await scene($)))
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { gauges } = await loadSettings($)
+    // The dials' clocks count seconds; the split ring and the terminal show minutes.
+    if (gauges !== 'ring' && e.surface !== 'terminal') {
+      await read($, second)
+      tickSoon($, await $.clock.now())
+    }
+    return drawPane($, e, await scene($), gauges)
+  })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || !(await loadSettings($)).band) return next(e)

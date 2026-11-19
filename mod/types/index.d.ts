@@ -15,6 +15,8 @@ declare module 'claude-code' {
       /** Bumped whenever what the readout draws from may have changed. */
       rev: number
       endpoint: EndpointState
+      /** Ticks every second for the dials' countdown clocks. */
+      second: number
     }
   }
 }

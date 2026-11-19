@@ -88,7 +88,7 @@ test('booked Nudges are kept in the store, and the Pane marks their window with 
   ])
   const ui = await $.ui.mount({ ...w.pane, surface: 'desktop' })
   const text = shown(await ui.drawn())
-  expect(text).toContain('<tspan fill="#E5A50A">● </tspan>5-hour · 2h 12m')
+  expect(text).toContain('<tspan fill="#E5A50A">● </tspan>5-hour · resets in')
   expect(text).not.toContain('<tspan fill="#E5A50A">● </tspan>Weekly')
   const term = await $.ui.mount({ ...w.pane, surface: 'terminal' })
   expect(shown(await term.drawn())).toMatch(/● \n5-hour · 2h 12m/)

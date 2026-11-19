@@ -28,6 +28,15 @@ export function until(ms: number): string {
   return `${Math.floor(h / 24)}d ${h % 24}h`
 }
 
+/** A ticking clock to a Reset: `3:09:00`, `20:07:00`, `2d 11:00:00`. */
+export function countdown(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  const tail = `${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`
+  return d > 0 ? `${d}d ${pad(h)}:${tail}` : `${h}:${tail}`
+}
+
 /** How long ago: `2m ago`, `45m ago`, `3h ago`. */
 export function ago(ms: number): string {
   const m = Math.max(0, Math.round(ms / MIN))

@@ -1,5 +1,7 @@
-// The Readout's Pane: the split ring, model rows, Burn Rate speedometer and
-// footnote, and the figures it shares with the band (band.tsx).
+// The Readout's Pane: by default a column of car-style dials (a fuel gauge and
+// a Burn Rate speedometer per window, dials.ts), or the split ring and the
+// 5-hour speedometer; then the model rows and the footnote. Also the figures
+// it shares with the band (band.tsx).
 import type { EngineInterface, RenderInput } from 'claude-code'
 import type { EndpointState } from '../types'
 import type { Booked } from './booker'
@@ -10,8 +12,10 @@ import { modelLines } from './models'
 import { activity, PACE_CALL_HINTS, PACE_CALL_WORDS, pace, type Pace } from './figures'
 import { paceCallColor, gaugeSvg } from './gauge'
 import { ringSvg, type Half } from './ring'
+import { fuelSvg, speedSvg, type Look } from './dials'
+import type { Gauges } from './settings'
 import { standing } from './standing'
-import { ago, hhmm, rate, resetLabel, until } from './time'
+import { ago, countdown, hhmm, rate, resetLabel, until } from './time'
 
 
 /** Everything one drawing reads. */
@@ -77,8 +81,9 @@ export function footnote(scene: Scene): { text: string; isAmber: boolean } {
   return { text: parts.join(' · '), isAmber: isStale || states.some(([, s]) => s.state === 'reset') }
 }
 
-export function drawPane($: EngineInterface, e: RenderInput<'Pane'>, scene: Scene) {
+export function drawPane($: EngineInterface, e: RenderInput<'Pane'>, scene: Scene, gauges: Gauges) {
   const { Box, Text } = $.ui.resolve(e)
+  if (gauges !== 'ring' && e.surface !== 'terminal') return drawDials($, e, scene, gauges)
   const five = half(scene, 'five_hour')
   const week = half(scene, 'seven_day')
   const alt = [five, week].map(x => `${x.big} ${x.label}`).join('; ')
@@ -113,6 +118,65 @@ export function drawPane($: EngineInterface, e: RenderInput<'Pane'>, scene: Scen
 }
 
 const NO_BURN = ['Burn Rate after', '1 h of Active Use']
+/**
+ * A desktop Pane cell in px: measured, a docked Pane of 42 × 62 cells drew
+ * 356 × 1004 px. The engine gives a Pane its size in cells alone.
+ */
+const CELL_W = 8
+const CELL_H = 16
+/** The smallest dial, where the figures still read; a shorter Pane scrolls. */
+const MIN_DIAL = 120
+
+/**
+ * The dials' size in px: four of them, the gaps between the Pane's rows, its
+ * text lines and a row to spare fill the Pane's height, capped by its width.
+ */
+function dialSize(e: RenderInput<'Pane'>, modelRows: number) {
+  // Between the four dials, the model rows' Box when there is one, and the footnote.
+  const gaps = modelRows ? 5 : 4
+  const rows = e.props.scroll.bodyRows - gaps - (modelRows + 1) - 1
+  return Math.max(MIN_DIAL, Math.min(e.props.bodyColumns * CELL_W, Math.floor((rows * CELL_H) / 4)))
+}
+const WINDOW_MS = { five_hour: 5 * 3_600_000, seven_day: 7 * 86_400_000 } as const
+
+/** The default Pane: per window a fuel gauge and a speedometer, in one column. */
+function drawDials($: EngineInterface, e: RenderInput<'Pane'>, scene: Scene, look: Look) {
+  const { Box, Text } = $.ui.resolve(e)
+  const hasBurn = activity(scene.log, scene.slots, scene.now) !== undefined
+  const models = scene.endpoint.state === 'off' ? [] : modelLines(scene.log, scene.now)
+  const DIAL = dialSize(e, models.length)
+  const dials = (['five_hour', 'seven_day'] as const).flatMap(id => {
+    const { name, colors } = { ...WINDOWS[id], colors: id === 'five_hour' ? WARM : COOL }
+    const h = half(scene, id)
+    const s = standing(scene.log, id, scene.now)
+    const toReset = s.state === 'read' ? s.reading.resetsAt - scene.now : undefined
+    const fuelAlt = `${h.big} ${h.label}${toReset !== undefined ? `, resets in ${countdown(toReset)}` : ''}`
+    const p = paceOf(scene, id)
+    const note = hasBurn ? ['Waiting for a', `${name} Reading`] : NO_BURN
+    const speedAlt = p
+      ? `${name} Burn Rate ${rate(p.rate)}${p.unit}: ${PACE_CALL_WORDS[p.paceCall]}, ${PACE_CALL_HINTS[p.paceCall]}. ${p.why}`
+      : `${name}: ${note.join(' ')}`
+    return [
+      // Images, not interactive frames: the Pane redraws every second for the
+      // clocks, and a frame reloads (blanks) on each redraw where an image swaps.
+      // The band's tooltip keeps the reason behind each Pace Call.
+      svg($, e, fuelSvg(look, DIAL, { name, colors, windowMs: WINDOW_MS[id], half: h, toReset }), fuelAlt, DIAL, DIAL, false),
+      svg($, e, speedSvg(look, DIAL, name, colors, p, note), speedAlt, DIAL, DIAL, false),
+    ]
+  })
+  const foot = footnote(scene)
+  return (
+    <Box flexDirection="column" alignItems="center" gap={1}>
+      {dials}
+      {models.length > 0 && (
+        <Box flexDirection="column">
+          {models.map(m => <Text size="footnote" dimColor={m.isStale}>{m.text}</Text>)}
+        </Box>
+      )}
+      <Text size="footnote" color={foot.isAmber ? AMBER : undefined} dimColor={!foot.isAmber}>{foot.text}</Text>
+    </Box>
+  )
+}
 
 /** The 5-hour Burn Rate speedometer. */
 function speedometer($: EngineInterface, e: RenderInput<'Pane'>, scene: Scene) {
@@ -137,9 +201,9 @@ function speedometer($: EngineInterface, e: RenderInput<'Pane'>, scene: Scene) {
 }
 
 /** An Svg where the surface draws one; the terminal gets the same figures as text instead. */
-function svg($: EngineInterface, e: RenderInput<'Pane'>, source: string, alt: string, width: number, height: number) {
+function svg($: EngineInterface, e: RenderInput<'Pane'>, source: string, alt: string, width: number, height: number, isInteractive = true) {
   if (e.surface === 'terminal') return null
   const { Svg } = $.ui.resolve(e)
-  return <Svg isInteractive source={source} alt={alt} width={width} height={height} />
+  return <Svg isInteractive={isInteractive} source={source} alt={alt} width={width} height={height} />
 }
 

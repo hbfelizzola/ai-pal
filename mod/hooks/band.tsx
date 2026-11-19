@@ -4,7 +4,7 @@
 import type { EngineInterface, RenderInput } from 'claude-code'
 import { PACE_CALL_HINTS, PACE_CALL_WORDS, type Pace } from './figures'
 import { paceCallColor, niceMax } from './gauge'
-import { AMBER, GREY, MUTED, NUDGE, TRACK, esc, font, gradient } from './look'
+import { AMBER, EASE, GREY, MUTED, NUDGE, TRACK, esc, font, gradient } from './look'
 import { half, isBooked, paceOf, type Scene } from './readout'
 import { WINDOWS, type MainWindow } from './windows'
 import { standing, type Standing } from './standing'
@@ -94,7 +94,8 @@ function columnSvg(x: number, w: number, lw: number, c: Column, now: number): st
     bar = `<clipPath id="${clip}"><rect x="${bx}" y="${by}" width="${bw}" height="${BAR}" rx="${BAR / 2}"/></clipPath>` +
       `<g clip-path="url(#${clip})"><rect x="${bx}" y="${by}" width="${bw}" height="${BAR}" fill="${TRACK}"/>` +
       `<rect x="${bx}" y="${by}" width="${(X(p.r1) - bx).toFixed(1)}" height="${BAR}" fill="${AMBER}" fill-opacity="0.92"/>` +
-      `<rect x="${X(p.r1).toFixed(1)}" y="${by}" width="${(X(p.r2) - X(p.r1)).toFixed(1)}" height="${BAR}" fill="${colors[1]}" fill-opacity="0.92"/></g>` +
+      `<rect x="${X(p.r1).toFixed(1)}" y="${by}" width="${(X(p.r2) - X(p.r1)).toFixed(1)}" height="${BAR}" fill="${colors[1]}" fill-opacity="0.92"/>` +
+      `<rect x="${X(p.r2).toFixed(1)}" y="${by}" width="${(bx + bw - X(p.r2)).toFixed(1)}" height="${BAR}" fill="${EASE}" fill-opacity="0.92"/></g>` +
       `<rect x="${(X(p.rate) - 2.5).toFixed(1)}" y="${by - 4}" width="5" height="${BAR + 8}" rx="2.5" fill="#FFFFFF" stroke="rgba(0,0,0,0.6)" stroke-width="1"/>`
   }
   return `<g opacity="${isStale ? 0.4 : 1}">${allowance}${g(c.bottomTip, text(y2, c.bottom) + bar)}</g>`

@@ -1,6 +1,6 @@
 {
   "name": "ai-pal",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Shows your Claude plan's Unused Allowance and Nudges you before a Reset loses it",
   "author": {
     "name": "Humberto Bernardes Felizzola"
