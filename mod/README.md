@@ -4,7 +4,7 @@
 
 A Claude plan meters usage in windows: a 5-hour window, a weekly window, and sometimes a weekly window per model. Whatever you haven't used when a window resets is lost. Claude's own meter warns you near a cap, but nothing tells you that allowance you've already paid for is about to go unused. ai-pal does.
 
-![The ai-pal Pane: a split ring with 62% of the 5-hour window and 47% of the weekly window left, a row for the Fable model, and a speedometer reading 18%/h, Use more](images/pane.png)
+<p align="center"><img src="images/pane.png" width="280" alt="The ai-pal Pane: a fuel gauge with 62% of the 5-hour window left and its clock at 3:00:00, the 5-hour speedometer at 18%/h (Use more), a weekly fuel gauge at 47% with 4d 11:00:00 to go, the weekly speedometer at 12%/day (On track), and a row for the Fable model"></p>
 
 ## What it does
 
@@ -16,6 +16,8 @@ A Claude plan meters usage in windows: a 5-hour window, a weekly window, and som
 - **On track**: your pace spends it by the Reset.
 - **Ease off**, or a lighter model: you'd run out well before the Reset.
 
+Each speedometer gives the three calls a third of its dial each: amber for Use more, the window's colour for On track, red for Ease off.
+
 **It keeps the key figures where you type.** A band above the prompt shows each window's Unused Allowance over a speed bar with your rate and the Pace Call. Hover a bar for the reason behind the call.
 
 ![The band above the prompt: 5-hour 62%, 3h 0m, 18%/h, Use more; Weekly 47%, Sun 01:00, 12%/day, On track](images/band.png)
@@ -26,7 +28,7 @@ A Claude plan meters usage in windows: a 5-hour window, a weekly window, and som
 
 Nudges stay quiet during your Quiet Hours (23:00–08:00 by default). A weekly Nudge that would land in them moves to just before they start, and a 5-hour and a weekly Nudge due within 30 minutes of each other arrive as one notification.
 
-**It's honest about old figures.** A Reading older than 15 minutes fades and gets a `~`, and the footnote under the ring always says how old the figures are. A window whose Reset has passed shows a dashed `Reset` rather than an assumed full window.
+**It's honest about old figures.** A Reading older than 15 minutes fades and gets a `~`, and the footnote under the dials always says how old the figures are. A window whose Reset has passed shows a dashed `Reset` rather than an assumed full window.
 
 ## Install
 
