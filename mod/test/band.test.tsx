@@ -134,6 +134,19 @@ test('on the desktop the band is images, so its redraws swap without a blank, wi
   // Each window's why waits hidden in a card the pointer reveals.
   const cards = nodes(tree, o => (o.props as { display?: string } | undefined)?.display === 'none' && (o.hover as { display?: string } | undefined)?.display === 'flex')
   expect(cards.length).toBe(2)
+  // Each card shares a hover scope with its column alone: the desktop then
+  // shows it in place, for exactly as long as the pointer is over that column,
+  // rather than lifting it into a popover that focus or the pointer on it holds open.
+  const scopes = cards.map(c => (c.hover as { scope?: string }).scope)
+  expect(scopes.every(s => typeof s === 'string' && s !== '')).toBe(true)
+  expect(new Set(scopes).size).toBe(2)
+  for (const scope of scopes) {
+    // The column lights its scope with a see-through hover; a bare `transparent` would paint it.
+    expect(JSON.stringify(nodes(tree, o => (o.hover as { scope?: string } | undefined)?.scope === scope).map(o => o.hover))).not.toContain('transparent')
+    const lit = nodes(tree, o => (o.hover as { scope?: string } | undefined)?.scope === scope)
+    expect(lit.length).toBe(2)
+    expect(nodes(lit.find(o => o !== cards[scopes.indexOf(scope)]), o => o.type === 'Svg').length).toBe(1)
+  }
   expect(shown(cards[0])).toContain('Use more, or a bigger model: ~12% would go unused even nonstop · resets in 2h 0m')
   expect(shown(cards[1])).toContain('spends it in')
 })

@@ -19,6 +19,9 @@ const CELL_PX = 7.2
 /** The hover card: a dark tooltip, legible on a light or dark theme. */
 const CARD = '#23272E'
 const CARD_TEXT = '#ECEFF3'
+/** A see-through hover, there only to light the column's scope: the desktop
+ * paints a bare `transparent` as the text colour; 8-digit hex it keeps. */
+const CLEAR = '#00000000'
 
 type Span = [text: string, fill: string, isBold?: boolean]
 const width = (spans: Span[], fs = 12) => spans.reduce((a, s) => a + s[0].length, 0) * fs * 0.56
@@ -143,19 +146,25 @@ export function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>, scen
   const lw = Math.ceil(Math.max(...cols.flatMap(c => [width(c.top), width(c.bottom)]))) + 10
   // Images, not frames: a frame reloads, blank for a moment, on every redraw
   // (each minute, and as a turn starts and ends). An image has no <title>
-  // tooltips, so the why waits in a card the pointer reveals over its column.
+  // tooltips, so the why waits in a card shown over its column on hover. The
+  // card and its column share a hover scope: without one the desktop lifts the
+  // card into a popover that stays up while the band has focus or the pointer
+  // rests on the popover; with one it shows in place, only while hovered.
   return (
     <Box flexDirection="row" columnGap={GAP_CELLS}>
-      {cols.map((c, i) => (
-        <Box key={`ai-pal-band-${c.id}`} width={colCells}>
-          <Svg source={columnImage(colW, lw, c, scene.now)} alt={lines[i]!} width={colW} height={ROW * 2} />
-          {c.s.state === 'read' ? (
-            <Box position="absolute" top={0} left={0} width={colCells} paddingX={1} display="none" hover={{ display: 'flex' }} backgroundColor={CARD}>
-              <Text color={CARD_TEXT}>{c.bottomTip}</Text>
-            </Box>
-          ) : null}
-        </Box>
-      ))}
+      {cols.map((c, i) => {
+        const scope = `ai-pal-band-${c.id}`
+        return (
+          <Box width={colCells} hover={{ scope, backgroundColor: CLEAR }}>
+            <Svg source={columnImage(colW, lw, c, scene.now)} alt={lines[i]!} width={colW} height={ROW * 2} />
+            {c.s.state === 'read' ? (
+              <Box position="absolute" top={0} left={0} width={colCells} paddingX={1} display="none" hover={{ scope, display: 'flex' }} backgroundColor={CARD}>
+                <Text color={CARD_TEXT}>{c.bottomTip}</Text>
+              </Box>
+            ) : null}
+          </Box>
+        )
+      })}
     </Box>
   )
 }
