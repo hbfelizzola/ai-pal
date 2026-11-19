@@ -20,7 +20,7 @@ Each speedometer gives the three calls a third of its dial each: amber for Use m
 
 <p align="center"><img src="mod/images/speedometer.png" width="220" alt="The 5-hour Burn Rate speedometer at 18%/h in its amber Use more third; On track runs from 21 to 40%/h and Ease off, in red, above that"></p>
 
-**It keeps the key figures where you type.** A band above the prompt shows each window's Unused Allowance over a speed bar with your rate and the Pace Call. Hover a bar for the reason behind the call.
+**It keeps the key figures where you type.** A band above the prompt shows each window's Unused Allowance over a speed bar with your rate and the Pace Call. Hover a window in the band for the reason behind the call.
 
 <p align="center"><img src="mod/images/band.png" alt="The band above the prompt: 5-hour 62% · 3h 0m with 18%/h · Use more, and Weekly 47% · Sun 01:00 with 12%/day · On track"></p>
 

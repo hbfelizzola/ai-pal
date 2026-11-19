@@ -12,9 +12,13 @@ import { DAY, H, old, rate, resetLabel, until } from './time'
 
 const BAR = 10
 const ROW = 22
-const COL_GAP = 28
+/** Cells between the two columns. */
+const GAP_CELLS = 4
 /** The band reports its width in code-font cells only; ~7.2px a cell is a guess. */
 const CELL_PX = 7.2
+/** The hover card: a dark tooltip, legible on a light or dark theme. */
+const CARD = '#23272E'
+const CARD_TEXT = '#ECEFF3'
 
 type Span = [text: string, fill: string, isBold?: boolean]
 const width = (spans: Span[], fs = 12) => spans.reduce((a, s) => a + s[0].length, 0) * fs * 0.56
@@ -101,14 +105,13 @@ function columnSvg(x: number, w: number, lw: number, c: Column, now: number): st
   return `<g opacity="${isStale ? 0.4 : 1}">${allowance}${g(c.bottomTip, text(y2, c.bottom) + bar)}</g>`
 }
 
-function bandSvg(W: number, cols: [Column, Column], now: number): string {
-  const colW = (W - COL_GAP) / 2
-  // One label width for both columns, so the four bars line up.
-  const lw = Math.ceil(Math.max(...cols.flatMap(c => [width(c.top), width(c.bottom)]))) + 10
+/** One window's column as its own image, so the pointer can hover each apart. */
+function columnImage(colW: number, lw: number, c: Column, now: number): string {
   const H2 = ROW * 2
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H2}" viewBox="0 0 ${W} ${H2}">` +
-    `<defs>${gradient('b5', WINDOWS.five_hour.colors)}${gradient('b7', WINDOWS.seven_day.colors)}</defs>` +
-    columnSvg(0, colW, lw, cols[0], now) + columnSvg(colW + COL_GAP, colW, lw, cols[1], now) + `</svg>`
+  const grad = c.id === 'five_hour' ? 'b5' : 'b7'
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${colW}" height="${H2}" viewBox="0 0 ${colW} ${H2}">` +
+    `<defs>${gradient(grad, WINDOWS[c.id].colors)}</defs>` +
+    columnSvg(0, colW, lw, c, now) + `</svg>`
 }
 
 /** The terminal's line for one window. */
@@ -133,10 +136,26 @@ export function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>, scen
     )
   }
   const { Svg } = $.ui.resolve(e)
-  const W = Math.max(360, Math.floor(e.props.bodyColumns * CELL_PX) - 4)
+  // Columns in whole cells, so each one's hover card can cover it exactly.
+  const colCells = Math.max(Math.ceil(166 / CELL_PX), Math.floor((e.props.bodyColumns - GAP_CELLS) / 2))
+  const colW = Math.floor(colCells * CELL_PX)
+  // One label width for both columns, so the four bars line up.
+  const lw = Math.ceil(Math.max(...cols.flatMap(c => [width(c.top), width(c.bottom)]))) + 10
+  // Images, not frames: a frame reloads, blank for a moment, on every redraw
+  // (each minute, and as a turn starts and ends). An image has no <title>
+  // tooltips, so the why waits in a card the pointer reveals over its column.
   return (
-    <Box flexDirection="row">
-      <Svg isInteractive source={bandSvg(W, cols, scene.now)} alt={lines.join(' · ')} width={W} height={ROW * 2} />
+    <Box flexDirection="row" columnGap={GAP_CELLS}>
+      {cols.map((c, i) => (
+        <Box key={`ai-pal-band-${c.id}`} width={colCells}>
+          <Svg source={columnImage(colW, lw, c, scene.now)} alt={lines[i]!} width={colW} height={ROW * 2} />
+          {c.s.state === 'read' ? (
+            <Box position="absolute" top={0} left={0} width={colCells} paddingX={1} display="none" hover={{ display: 'flex' }} backgroundColor={CARD}>
+              <Text color={CARD_TEXT}>{c.bottomTip}</Text>
+            </Box>
+          ) : null}
+        </Box>
+      ))}
     </Box>
   )
 }

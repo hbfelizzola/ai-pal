@@ -18,7 +18,7 @@ A Claude plan meters usage in windows: a 5-hour window, a weekly window, and som
 
 Each speedometer gives the three calls a third of its dial each: amber for Use more, the window's colour for On track, red for Ease off.
 
-**It keeps the key figures where you type.** A band above the prompt shows each window's Unused Allowance over a speed bar with your rate and the Pace Call. Hover a bar for the reason behind the call.
+**It keeps the key figures where you type.** A band above the prompt shows each window's Unused Allowance over a speed bar with your rate and the Pace Call. Hover a window in the band for the reason behind the call.
 
 ![The band above the prompt: 5-hour 62%, 3h 0m, 18%/h, Use more; Weekly 47%, Sun 01:00, 12%/day, On track](images/band.png)
 

@@ -106,3 +106,34 @@ test('with nothing stored the band is hidden', async ($, on) => {
     expect(text).not.toContain('5-hour')
   }
 })
+
+/** Every node in a drawing that matches. */
+function nodes(node: unknown, is: (o: Record<string, unknown>) => boolean): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  const walk = (n: unknown) => {
+    if (Array.isArray(n)) return n.forEach(walk)
+    if (!n || typeof n !== 'object') return
+    const o = n as Record<string, unknown>
+    if (is(o)) out.push(o)
+    Object.values(o).forEach(walk)
+  }
+  walk(node)
+  return out
+}
+
+test('on the desktop the band is images, so its redraws swap without a blank, with the why in a card shown on hover', async ($, on) => {
+  const w = engine(on, { store: busyWeek })
+  await start($, w)
+  const ui = await $.ui.mount({ ...w.band, surface: 'desktop' })
+  const tree = await ui.drawn()
+  await ui.unmount()
+  const images = nodes(tree, o => o.type === 'Svg').map(o => o.props as Record<string, unknown>)
+  // One image per window, none an interactive frame.
+  expect(images.length).toBe(2)
+  expect(images.map(o => o.isInteractive === true)).toEqual([false, false])
+  // Each window's why waits hidden in a card the pointer reveals.
+  const cards = nodes(tree, o => (o.props as { display?: string } | undefined)?.display === 'none' && (o.hover as { display?: string } | undefined)?.display === 'flex')
+  expect(cards.length).toBe(2)
+  expect(shown(cards[0])).toContain('Use more, or a bigger model: ~12% would go unused even nonstop · resets in 2h 0m')
+  expect(shown(cards[1])).toContain('spends it in')
+})
