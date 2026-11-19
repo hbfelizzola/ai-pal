@@ -147,6 +147,8 @@ test('on the desktop the band is images, so its redraws swap without a blank, wi
     expect(lit.length).toBe(2)
     expect(nodes(lit.find(o => o !== cards[scopes.indexOf(scope)]), o => o.type === 'Svg').length).toBe(1)
   }
+  // At the caption size, so the whole sentence fits in the band's height.
+  for (const card of cards) expect(nodes(card, o => o.type === 'Text').map(t => (t.props as { size?: string }).size)).toEqual(['caption'])
   expect(shown(cards[0])).toContain('Use more, or a bigger model: ~12% would go unused even nonstop · resets in 2h 0m')
   expect(shown(cards[1])).toContain('spends it in')
 })

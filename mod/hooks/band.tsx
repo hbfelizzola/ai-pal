@@ -159,7 +159,7 @@ export function drawBand($: EngineInterface, e: RenderInput<'AbovePrompt'>, scen
             <Svg source={columnImage(colW, lw, c, scene.now)} alt={lines[i]!} width={colW} height={ROW * 2} />
             {c.s.state === 'read' ? (
               <Box position="absolute" top={0} left={0} width={colCells} paddingX={1} display="none" hover={{ scope, display: 'flex' }} backgroundColor={CARD}>
-                <Text color={CARD_TEXT}>{c.bottomTip}</Text>
+                <Text size="caption" color={CARD_TEXT}>{c.bottomTip}</Text>
               </Box>
             ) : null}
           </Box>
